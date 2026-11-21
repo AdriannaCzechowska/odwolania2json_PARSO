@@ -1,0 +1,38 @@
+Dokument: odwołanie do Krajowej Izby Odwoławczej (KIO). Wyodrębnij dane do JSON.
+
+Zasady pól:
+- OdwolanieKIO.data: data pisma z nagłówka pierwszej strony (linia "Miejscowość, dnia ..."), format YYYY-MM-DD.
+- OdwolanieKIO.miejscowosc: miejscowość z tej samej linii nagłówka (w mianowniku, np. "Katowice").
+- OdwolanieKIO.czynnosc_powod_id: liczba 1-12 opisująca zaskarżoną czynność Zamawiającego, ustalona na podstawie PIERWSZEJ zaskarżonej czynności / pierwszego zarzutu. Szukaj zdań typu "Zamawiający w dniu ... unieważnił/odrzucił/wybrał/opublikował/zmodyfikował/udzielił wyjaśnień" oraz listy "zaskarżam czynność/zaniechanie".
+  1=Decyzja o odrzuceniu oferty (odrzucenie oferty Odwołującego)
+  2=Ogłoszenie wyboru oferty (wybór oferty najkorzystniejszej innego wykonawcy)
+  3=Decyzja o wykluczeniu wykonawcy (wykluczenie Odwołującego)
+  4=Publikacja specyfikacji warunków zamówienia (SWZ)
+  5=Modyfikacja treści SWZ
+  6=Odpowiedzi/wyjaśnienia do SWZ
+  7=Zaniechanie odrzucenia oferty (innego wykonawcy)
+  8=Zaniechanie wykluczenia wykonawcy (innego wykonawcy)
+  9=Decyzja o unieważnieniu postępowania
+  10=Zaniechanie unieważnienia postępowania
+  11=Opis przedmiotu zamówienia (OPZ)
+  12=Projektowane postanowienia umowy
+  WAŻNE: "Decyzja" (1, 3, 9) = Zamawiający COŚ ZROBIŁ wobec Odwołującego lub postępowania. "Zaniechanie" (7, 8, 10) = Odwołujący zarzuca, że Zamawiający czegoś NIE zrobił (nie odrzucił oferty konkurenta, nie wykluczył innego wykonawcy, nie unieważnił postępowania), mimo że powinien.
+- OdwolanieKIO.czynnosc_dzien: data tej czynności (YYYY-MM-DD), null jeśli brak.
+- OdwolanieKIO.czynnosc_opis: zostaw null (uzupełniane automatycznie).
+- Odwolujacy: wykonawca wnoszący odwołanie. Jeden obiekt na jeden podmiot (kilku pełnomocników NIE tworzy kolejnych obiektów). Osobne obiekty tylko przy konsorcjum: dla każdego członka, lider pierwszy. Nazwa pełna jak w tekście, bez adresu.
+  - krs, nip, regon: same cyfry, tylko jeśli podane przy tym podmiocie; inaczej null.
+  - przez-pelnomocnika: 1 jeśli odwołanie składa pełnomocnik (adwokat, radca prawny, "reprezentowana przez"), inaczej 0.
+  - pelnomocnik.imie_nazwisko: imię i nazwisko PIERWSZEGO pełnomocnika, w mianowniku, bez tytułów (adw., r. pr., mec.).
+  - pelnomocnik.nazwa: nazwa kancelarii / podmiotu zatrudniającego pełnomocnika.
+  - pelnomocnik.mail: adres e-mail pełnomocnika lub z adresu do korespondencji.
+- Zamawiajacy: podmiot z sekcji "Zamawiający". krs/nip/regon tylko jeśli podane przy Zamawiającym. prowadzacy_postepowanie: null gdy jeden zamawiający; przy kilku: 1 dla oznaczonego jako prowadzący/lider, 0 dla pozostałych.
+- ZamowieniePubliczne:
+  - numer_bzp: numer ogłoszenia w Biuletynie Zamówień Publicznych, np. "2025/BZP 00123456". Nie wpisuj numerów TED.
+  - numer_postepowania: numer referencyjny / znak sprawy, np. "ZP.447.2026".
+  - numer_ted: numer ogłoszenia w Dzienniku Urzędowym UE (TED), np. "363730-2025".
+  - tytul: nazwa zamówienia (zwykle w cudzysłowie po "pn."), bez cudzysłowów.
+
+Brak informacji = null. Nie wymyślaj danych. Zwróć wyłącznie JSON.
+
+TEKST DOKUMENTU:
+{text}

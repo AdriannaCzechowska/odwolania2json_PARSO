@@ -1,0 +1,166 @@
+# Konfiguracja klas dokumentow.
+# Nowa klasa = nowy wpis w document_types + schemat JSON + prompt. Bez zmian w kodzie.
+
+settings:
+  llm:
+    base_url: https://api.eu.mistral.ai/v1    # endpoint UE
+    model: ministral-8b-2512                   # Apache 2.0, 8B, open weights
+    vision_model: ministral-8b-2512            # do skanow (OCR przez model)
+    temperature: 0
+    max_output_tokens: 1500
+    structured_output: json_schema             # json_schema | json_object
+    min_interval_s: 0.3                        # odstep miedzy zapytaniami (plan darmowy ma ostry limit)
+    max_retries: 8                             # ponowienia przy 429 / bledach sieci
+    request_timeout_s: 60                      # limit na jedna odpowiedz serwera
+    max_network_retries: 2                     # zerwane polaczenie: najwyzej 2 ponowienia
+    max_call_seconds: 180                      # twardy limit na zapytanie (z ponowieniami); potem wynik z samych regul
+    price_in_per_mtok_usd: 0.15                # tylko do szacunku kosztu
+    price_out_per_mtok_usd: 0.15
+    session_budget_usd: 2.0                    # limit aplikacyjny (NIE zastepuje limitu u dostawcy)
+  pdf:
+    max_pages: 4                 # dane sa zwykle na pierwszych 3 stronach
+    min_chars_per_page: 60       # mniej = strona traktowana jako skan
+    ocr_dpi: 200
+    ocr_rotations: [0, 180, 90, 270]   # kolejne proby, gdy odczyt skanu jest nieczytelny
+  classification:
+    scan_chars: 4000             # ile znakow poczatku dokumentu analizowac
+    min_score: 3                 # ponizej = dokument spoza klas -> {}
+  unknown_output: {}             # wynik dla dokumentu spoza klas
+
+document_types:
+
+  odwolanie:
+    description: Odwołanie do Krajowej Izby Odwoławczej
+    schema: schemas/odwolanie.schema.json
+    prompt: prompts/odwolanie.txt
+    llm: always                  # always | fallback | never
+    classify:
+      min_score: 8               # sam naglowek "odwolanie" (np. pouczenie w decyzji) nie wystarczy
+      title: {"odwołanie": 6}                 # szukane w naglowku (pierwsze 1500 znakow)
+      keywords: {"odwołujący": 2, "zamawiający": 1, "krajowejizbyodwoławczej": 2, "zarzut": 2, "wnoszęo": 2, "art.513": 1, "prezes": 1}
+      negative: {"wyrok": 6, "sygn.akt": 8, "wimieniurzeczypospolitej": 6, "postanowienie": 5, "ogłoszenieozamówieniu": 5, "ustanawiampełnomocnik": 6, "udzielapełnomocnictwa": 6, "udzielampełnomocnictwa": 6, "potwierdzenietransakcji": 6}
+    rules:
+      - {extractor: header_city_date, fields: {date: OdwolanieKIO.data, city: OdwolanieKIO.miejscowosc}}
+      - extractor: sentence_classifier       # zdanie o zaskarzonej czynnosci -> kod 1-12 + data czynnosci
+        sentence: 'Zamawiający\s+(?:w\s+dniu|dnia)\s+.{0,40}?20\d\d.*?\.(?=\s+[A-ZĄĆĘŁŃÓŚŹŻ„]|\s*$)'
+        code_field: OdwolanieKIO.czynnosc_powod_id
+        date_field: OdwolanieKIO.czynnosc_dzien
+        codes:                                 # kolejnosc = priorytet (zaniechania przed decyzjami)
+          - [10, 'zaniecha\w* unieważni|nie unieważni']
+          - [8, 'zaniecha\w* wyklucz|nie wyklucz']
+          - [7, 'zaniecha\w* odrzuc|nie odrzuci']
+          - [9, 'unieważni']
+          - [1, 'odrzuc|odrzuci']
+          - [3, 'wyklucz']
+          - [12, 'projektowan\w* postanowie|wz[óo]r\w* umowy']
+          - [11, 'opis\w* przedmiotu zamówienia|\bOPZ\b']
+          - [5, 'zmodyfikow|modyfikac|zmienił treść|zmian\w* treści']
+          - [6, 'odpowiedzi na pytania|odpowiedzi i wyjaśnie|wyjaśnie\w* (?:do )?treści']
+          - [4, 'specyfikacj\w* warunków zamówienia|\bSWZ\b']
+          - [2, 'wyb\w*r\w* ofert|wybrał\w* ofert|najkorzystniejsz']
+      - {extractor: regex, field: 'Odwolujacy[].pelnomocnik.mail', type: email, fill_only: true,
+         patterns: ['(?:reprezentowan|pełnomocni|adres do korespondencji)[\s\S]{0,500}?([\w.+-]+@[\w-]+(?:\.[\w-]+)+)']}
+      - {extractor: regex, field: ZamowieniePubliczne.numer_bzp, type: bzp,
+         patterns: ['(20\d\d\s*/\s*BZP\s*\d{6,8}(?:\s*/\s*\d{1,2})?)']}
+      - {extractor: regex, field: ZamowieniePubliczne.numer_ted, type: ted,
+         patterns: ['(20\d\d\s*/\s*S\s*\d{1,3}\s*-\s*\d{6})', '(?:Dzienniku Urzędowym|Dz\.\s*Urz|TED|OJ\s*S)[^\n]{0,80}?(\d{6}\s*-\s*20\d\d)']}
+    fields:                      # typy do normalizacji i weryfikacji
+      OdwolanieKIO.data: date
+      OdwolanieKIO.czynnosc_dzien: date
+      OdwolanieKIO.czynnosc_powod_id: int
+      OdwolanieKIO.miejscowosc: place     # przywracanie polskich znakow (Lodz -> Łódź)
+      Odwolujacy[].krs: krs
+      Odwolujacy[].nip: nip
+      Odwolujacy[].regon: regon
+      Odwolujacy[].nazwa: org_name
+      Odwolujacy[].przez-pelnomocnika: int01
+      Odwolujacy[].pelnomocnik.imie_nazwisko: first_person
+      Odwolujacy[].pelnomocnik.nazwa: text
+      Odwolujacy[].pelnomocnik.mail: email
+      Zamawiajacy[].krs: krs
+      Zamawiajacy[].nip: nip
+      Zamawiajacy[].regon: regon
+      Zamawiajacy[].nazwa: org_name
+      Zamawiajacy[].prowadzacy_postepowanie: int01
+      ZamowieniePubliczne.numer_bzp: bzp
+      ZamowieniePubliczne.numer_ted: ted
+      ZamowieniePubliczne.numer_postepowania: text
+      ZamowieniePubliczne.tytul: quoted_text
+    derive:
+      - {target: OdwolanieKIO.czynnosc_opis, source: OdwolanieKIO.czynnosc_powod_id, map: czynnosci}
+    options:
+      consortium: list           # list = wszyscy czlonkowie, lider pierwszy (potwierdzone przez UZP 21.11) | leader = tylko lider
+      consortium_lists: [Odwolujacy]
+      shared_fields: {Odwolujacy: [pelnomocnik, przez-pelnomocnika]}   # pelnomocnik konsorcjum wspolny dla czlonkow
+    postprocess:
+      rule_only: [OdwolanieKIO.data, OdwolanieKIO.miejscowosc]   # tylko z naglowka, bez zgadywania
+      dedupe: {Odwolujacy: [nip, nazwa], Zamawiajacy: [nip, nazwa]}
+      null_if_single: [{list: Zamawiajacy, field: prowadzacy_postepowanie}]
+
+  pelnomocnictwo:
+    description: Pełnomocnictwo
+    schema: schemas/pelnomocnictwo.schema.json
+    prompt: prompts/pelnomocnictwo.txt
+    llm: always
+    classify:
+      title: {"pełnomocnictwo": 6}
+      keywords: {"ustanawiam": 3, "pełnomocnikiem": 3, "udzielam": 2, "udzielapełnomocnictwa": 3, "niniejszymudziel": 2, "mocodawc": 2, "zakrespełnomocnictwa": 2, "dalszychpełnomocnictw": 1}
+      negative: {"wyrok": 6, "potwierdzenietransakcji": 6, "rachunekodbiorcy": 4, "zarzutnr": 4, "wnoszęo": 3}
+    rules: []
+    fields:
+      mocodawca[].data.krs: krs
+      mocodawca[].data.nip: nip
+      mocodawca[].data.nazwa: org_name
+      mocodawca[].data.imie_nazwisko: person
+      mocodawca[].podpisujacy[].imie_nazwisko: person
+      pelnomocnicy[].imie_nazwisko: person
+      pelnomocnicy[].pesel: pesel
+    postprocess:
+      dedupe: {pelnomocnicy: [imie_nazwisko]}
+
+  przelew:
+    description: Potwierdzenie przelewu bankowego
+    schema: schemas/przelew.schema.json
+    prompt: prompts/przelew.txt
+    llm: fallback                # LLM tylko gdy reguly nie znajda wymaganych pol
+    required: [przelew_bankowy.data_operacji, przelew_bankowy.kwota, przelew_bankowy.na_rachunek, przelew_bankowy.z_rachunku, przelew_bankowy.tytul]
+    classify:
+      title: {"potwierdzenie": 3, "przelew": 3, "transakcj": 2}
+      keywords: {"rachunek": 2, "tytuł": 2, "kwota": 2, "zleceniodawc": 2, "odbiorc": 1, "beneficjent": 1, "pln": 1, "bank": 1}
+      negative: {"wyrok": 6, "ustanawiampełnomocnik": 6, "zarzutnr": 4}
+    rules:
+      - extractor: labels
+        stop_labels: ["Nr klienta", "Waluta", "Kanał", "Opłata", "Status", "Typ operacji", "Tryb", "Godz", "Nadawca", "Adresat", "Odbiorca", "Zleceniodawca", "Bank"]
+        fields:
+          przelew_bankowy.data_operacji: {type: date, labels: ["Data operacji", "Data transakcji", "Data wykonania", "Data realizacji", "Data księgowania", "Data przelewu", "Data"]}
+          przelew_bankowy.kwota: {type: amount, labels: ["Kwota przelewu", "Kwota operacji", "Kwota", "Wartość", "Suma"]}
+          przelew_bankowy.z_rachunku: {type: iban, labels: ["Rachunek zleceniodawcy", "Z rachunku", "Rachunek nadawcy", "Rachunek obciążany", "Konto nadawcy", "Z konta", "Rachunek źródłowy", "Rachunek płatnika"]}
+          przelew_bankowy.na_rachunek: {type: iban, labels: ["Rachunek beneficjenta", "Rachunek odbiorcy", "Na rachunek", "Konto odbiorcy", "Na konto", "Rachunek docelowy", "Rachunek uznawany", "Rachunek uznany", "Rachunek kontrahenta"]}
+          przelew_bankowy.numer_transakcji: {type: ref, labels: ["Numer referencyjny", "Nr ref", "Nr referencyjny", "Numer transakcji", "Nr transakcji", "Identyfikator transakcji", "ID transakcji", "Referencja", "Identyfikator operacji", "Numer referencyjny operacji", "Nr operacji"]}
+          przelew_bankowy.tytul: {type: multiline, labels: ["Tytuł przelewu", "Tytuł operacji", "Tytułem", "Tytuł"]}
+      - {extractor: regex, field: przelew_bankowy.z_rachunku, type: iban,
+         patterns: ['z\s+rachunku\s+(?:nr\s*)?((?:PL)?\s*\d{2}(?:\s?\d{4}){6})']}
+      - {extractor: regex, field: przelew_bankowy.na_rachunek, type: iban,
+         patterns: ['na\s+rachunek\s+(?:nr\s*)?((?:PL)?\s*\d{2}(?:\s?\d{4}){6})']}
+    fields:
+      przelew_bankowy.data_operacji: date
+      przelew_bankowy.kwota: amount
+      przelew_bankowy.z_rachunku: iban
+      przelew_bankowy.na_rachunek: iban
+      przelew_bankowy.numer_transakcji: text
+      przelew_bankowy.tytul: quoted_text
+
+dictionaries:
+  czynnosci:
+    1: Decyzja o odrzuceniu oferty
+    2: Ogłoszenie wyboru oferty
+    3: Decyzja o wykluczeniu wykonawcy
+    4: Publikacja specyfikacji warunków zamówienia (SWZ)
+    5: Modyfikacja treści SWZ
+    6: Odpowiedzi/wyjaśnienia do SWZ
+    7: Zaniechanie odrzucenia oferty
+    8: Zaniechanie wykluczenia wykonawcy
+    9: Decyzja o unieważnieniu postępowania
+    10: Zaniechanie unieważnienia postępowania
+    11: Opis przedmiotu zamówienia (OPZ)
+    12: Projektowane postanowienia umowy

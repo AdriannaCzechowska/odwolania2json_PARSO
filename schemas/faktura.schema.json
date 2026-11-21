@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["numer", "data_wystawienia", "kwota_brutto", "nip_sprzedawcy"],
+  "properties": {
+    "numer": {"type": ["string", "null"]},
+    "data_wystawienia": {"type": ["string", "null"]},
+    "kwota_brutto": {"type": ["number", "null"]},
+    "nip_sprzedawcy": {"type": ["string", "null"]}
+  }
+}

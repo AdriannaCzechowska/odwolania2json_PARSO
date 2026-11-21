@@ -1,0 +1,4 @@
+Dokument: faktura VAT. Wyodrębnij: numer faktury, datę wystawienia (YYYY-MM-DD), kwotę brutto (liczba), NIP sprzedawcy (same cyfry). Brak informacji = null. Zwróć wyłącznie JSON.
+
+TEKST DOKUMENTU:
+{text}

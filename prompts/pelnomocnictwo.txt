@@ -1,0 +1,15 @@
+Dokument: pełnomocnictwo w sprawie zamówienia publicznego / postępowania przed KIO. Wyodrębnij dane do JSON.
+
+Zasady pól:
+- mocodawca: podmiot(y) UDZIELAJĄCY pełnomocnictwa. Przy konsorcjum (kilku wykonawców wspólnie) osobny obiekt dla każdego.
+  - data.typ: "osoba_prawna" (spółka, firma, instytucja) albo "osoba_fizyczna" (osoba prowadząca działalność lub osoba prywatna).
+  - data.nazwa: pełna nazwa mocodawcy dokładnie jak w tekście, bez adresu i siedziby. Dla przedsiębiorcy będącego osobą fizyczną: nazwa firmy razem z imieniem i nazwiskiem (np. "BOMARK-BUD Olga Baran").
+  - data.imie_nazwisko: imię i nazwisko mocodawcy w mianowniku tylko dla osoby fizycznej; dla osoby prawnej null.
+  - data.krs, data.nip: same cyfry, tylko jeśli podane; inaczej null.
+  - podpisujacy: osoby podpisujące pełnomocnictwo w imieniu mocodawcy (zwykle pod kropkami / "podpis", z funkcją np. Prezes Zarządu, Prokurent). Imię i nazwisko w mianowniku, bez funkcji.
+- pelnomocnicy: osoby, którym udzielono pełnomocnictwa (po "ustanawiam pełnomocnikiem", "udzielam pełnomocnictwa"). Imię i nazwisko w MIANOWNIKU (np. "Patrycji Furman" -> "Patrycja Furman"), bez tytułów (adw., r. pr., radca prawny). pesel: 11 cyfr jeśli podany, inaczej null.
+
+Brak informacji = null. Nie wymyślaj danych. Zwróć wyłącznie JSON.
+
+TEKST DOKUMENTU:
+{text}

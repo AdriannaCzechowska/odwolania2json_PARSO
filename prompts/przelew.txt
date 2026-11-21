@@ -1,0 +1,14 @@
+Dokument: potwierdzenie przelewu bankowego. Wyodrębnij dane do JSON.
+
+Zasady pól:
+- data_operacji: data wykonania/transakcji, YYYY-MM-DD.
+- kwota: liczba (np. 17.0), bez waluty.
+- z_rachunku: rachunek nadawcy/zleceniodawcy: wszystkie 26 cyfr (razem z 2 cyframi kontrolnymi zaraz po "PL"), bez liter "PL" i spacji.
+- na_rachunek: rachunek odbiorcy/beneficjenta: wszystkie 26 cyfr (razem z cyframi kontrolnymi), bez "PL" i spacji.
+- numer_transakcji: numer referencyjny / identyfikator transakcji, jeśli jest; inaczej null.
+- tytul: pełny tytuł przelewu dokładnie jak w tekście (połącz linie spacją).
+
+Brak informacji = null. Nie wymyślaj danych. Zwróć wyłącznie JSON.
+
+TEKST DOKUMENTU:
+{text}

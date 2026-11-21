@@ -1,0 +1,9 @@
+pymupdf>=1.24
+openai>=1.40
+jsonschema>=4.21
+pyyaml>=6.0
+python-dotenv>=1.0
+rapidfuzz>=3.6
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9

@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Odwołania2JSON</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #E9EDF2;      /* chlodny papier urzedowy */
+    --sheet: #FFFFFF;
+    --ink: #1D2740;
+    --ink-soft: #5B6680;
+    --line: #CCD3DE;
+    --stamp: #2C44A6;      /* atrament pieczatki */
+    --high: #2E7D5B;       /* regula */
+    --mid: #9A6A12;        /* model, potwierdzone w tekscie */
+    --low: #B3261E;        /* model, do sprawdzenia */
+    --r-sm: 4px; --r-lg: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--paper); color: var(--ink); font: 400 15px/1.5 "Archivo", system-ui, sans-serif; }
+  button, input { font: inherit; }
+  :focus-visible { outline: 3px solid var(--stamp); outline-offset: 2px; }
+
+  header { display: flex; align-items: center; gap: 20px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--sheet); }
+  .brand { font-weight: 800; font-stretch: 125%; font-size: 19px; letter-spacing: -0.01em; }
+  .brand span { font-weight: 400; color: var(--ink-soft); font-stretch: 100%; font-size: 14px; margin-left: 10px; }
+  .status { margin-left: auto; font-size: 13px; color: var(--ink-soft); }
+  .status b { color: var(--ink); font-weight: 600; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--low); vertical-align: 1px; }
+  .dot.on { background: var(--high); }
+  .btn { border: 1px solid var(--stamp); background: var(--stamp); color: #fff; padding: 8px 16px; border-radius: var(--r-sm); cursor: pointer; font-weight: 600; }
+  .btn.ghost { background: transparent; color: var(--stamp); }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: calc(100% - 61px); }
+  .pane { min-height: 0; display: flex; flex-direction: column; }
+  .doc { border-right: 1px solid var(--line); }
+
+  .drop { flex: 1; margin: 24px; border: 2px dashed var(--line); border-radius: var(--r-lg); display: grid; place-content: center; text-align: center; gap: 12px; cursor: pointer; padding: 24px; }
+  .drop.over { border-color: var(--stamp); background: #DFE5F3; }
+  .drop h2 { margin: 0; font-stretch: 125%; font-weight: 700; font-size: 26px; }
+  .drop p { margin: 0; color: var(--ink-soft); max-width: 40ch; }
+
+  /* podglad stron z nakladka podswietlen */
+  .pages { flex: 1; overflow: auto; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .page { position: relative; width: 100%; max-width: 760px; background: #fff; box-shadow: 0 1px 2px rgba(29,39,64,.18); }
+  .page img { display: block; width: 100%; }
+  .page .no { position: absolute; top: 8px; right: 10px; font-size: 12px; color: var(--ink-soft); background: #fff; padding: 0 6px; border-radius: 3px; }
+  .page .scan { position: absolute; left: 10px; top: 8px; font-size: 12px; color: #fff; background: var(--mid); padding: 1px 8px; border-radius: 3px; }
+  .hl { position: absolute; border-radius: 2px; mix-blend-mode: multiply; pointer-events: none; opacity: .28; }
+  .hl.high { background: var(--high); } .hl.medium { background: var(--mid); } .hl.low { background: var(--low); }
+  .hl.active { opacity: .55; outline: 2px solid var(--ink); animation: pulse 1s ease-out 2; }
+  @keyframes pulse { 50% { outline-offset: 4px; } }
+  @media (prefers-reduced-motion: reduce) { .hl.active { animation: none; } }
+
+  .result { background: var(--sheet); overflow: hidden; }
+  .result-head { position: relative; padding: 22px 28px 14px; border-bottom: 1px solid var(--line); min-height: 112px; }
+  .file { font-size: 13px; color: var(--ink-soft); word-break: break-all; padding-right: 220px; }
+  .meta { font-size: 13px; color: var(--ink-soft); margin-top: 6px; padding-right: 220px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  /* pieczatka z typem dokumentu - jedyny mocny akcent */
+  .stamp { position: absolute; right: 28px; top: 18px; transform: rotate(-7deg) scale(1.4); opacity: 0;
+           border: 3px solid var(--stamp); color: var(--stamp); border-radius: 6px; padding: 6px 14px 5px;
+           font-weight: 800; font-stretch: 62%; font-size: 30px; line-height: 1; letter-spacing: .02em;
+           box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px var(--stamp); }
+  .stamp.show { animation: stamp .32s cubic-bezier(.2,1.6,.4,1) forwards; }
+  .stamp.unknown { border-color: var(--low); color: var(--low); box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px var(--low); }
+  @keyframes stamp { to { opacity: .92; transform: rotate(-7deg) scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .stamp.show { animation: none; opacity: .92; transform: rotate(-7deg); } }
+
+  .tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+  .tab { border: 0; background: none; padding: 12px 10px; cursor: pointer; color: var(--ink-soft); border-bottom: 3px solid transparent; font-weight: 600; }
+  .tab[aria-selected="true"] { color: var(--ink); border-color: var(--stamp); }
+  .body { flex: 1; overflow: auto; padding: 18px 28px 40px; }
+  .hidden { display: none !important; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-soft); margin-bottom: 14px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+  .sw.high { background: var(--high); } .sw.medium { background: var(--mid); } .sw.low { background: var(--low); }
+
+  section.group { margin-bottom: 22px; }
+  section.group h3 { margin: 0 0 6px; font-size: 15px; font-weight: 700; font-stretch: 112%; }
+  .item-label { font-size: 13px; color: var(--ink-soft); margin: 10px 0 2px; }
+  dl { display: grid; grid-template-columns: minmax(140px, 34%) 1fr; margin: 0; border-top: 1px solid var(--line); }
+  dt, dd { margin: 0; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  dt { color: var(--ink-soft); font-size: 13.5px; padding-right: 12px; }
+  dd { display: flex; gap: 8px; align-items: baseline; word-break: break-word; padding-left: 10px; }
+  dd .v { flex: 1; }
+  dd .null { color: #9AA3B5; font-style: italic; }
+  dd[data-conf="high"] { box-shadow: inset 3px 0 0 var(--high); }
+  dd[data-conf="medium"] { box-shadow: inset 3px 0 0 var(--mid); }
+  dd[data-conf="low"] { box-shadow: inset 3px 0 0 var(--low); background: #FBEFEE; }
+  dd.clickable { cursor: pointer; }
+  dd.clickable:hover .v { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+  dd .where { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+  textarea { width: 100%; min-height: 60vh; font: 13px/1.55 "JetBrains Mono", ui-monospace, monospace; color: var(--ink);
+             border: 1px solid var(--line); border-radius: var(--r-sm); padding: 14px; resize: vertical; background: #FBFCFD; }
+  .row { display: flex; gap: 10px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+  .msg { font-size: 13px; }
+  .msg.err { color: var(--low); }
+  .msg.ok { color: var(--high); }
+  .trace h4 { margin: 18px 0 6px; font-size: 14px; }
+  .trace ul { margin: 0; padding-left: 18px; }
+  .trace li { margin: 2px 0; font-size: 13.5px; }
+  pre.text { white-space: pre-wrap; font: 12.5px/1.5 "JetBrains Mono", monospace; background: #FBFCFD; border: 1px solid var(--line); padding: 12px; border-radius: var(--r-sm); }
+  .empty { color: var(--ink-soft); padding: 40px 0; max-width: 46ch; }
+  .busy { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--stamp); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+
+  /* kreator typow dokumentow */
+  .creator { position: fixed; inset: 61px 0 0 0; background: var(--paper); overflow: auto; z-index: 5; }
+  .creator-inner { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+  .creator h2 { font-stretch: 125%; font-size: 24px; margin: 0 0 4px; }
+  .creator h3 { font-size: 16px; margin: 0 0 10px; font-stretch: 112%; }
+  .creator .lead { color: var(--ink-soft); margin: 0 0 22px; max-width: 70ch; }
+  .card { background: var(--sheet); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px 22px; margin-bottom: 18px; }
+  .types-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .types-table td, .types-table th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  .types-table th { color: var(--ink-soft); font-weight: 600; font-size: 13px; }
+  .badge { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: #E3E8F0; color: var(--ink-soft); }
+  .badge.new { background: #DCEFE5; color: var(--high); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+  label.f input[type=text], label.f textarea, label.f select { font: 14px/1.4 "Archivo", sans-serif; color: var(--ink); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; background: #fff; }
+  label.f textarea { min-height: 170px; font: 12.5px/1.5 "JetBrains Mono", monospace; resize: vertical; }
+  label.f .hint { font-weight: 400; }
+  .fields-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .fields-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); }
+  .fields-table code { font: 12.5px "JetBrains Mono", monospace; }
+  .fields-table select { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+  .test { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; margin-top: 10px; }
+  .test.ok { border-left: 4px solid var(--high); } .test.bad { border-left: 4px solid var(--low); }
+  .test pre { margin: 6px 0 0; white-space: pre-wrap; font: 12px/1.45 "JetBrains Mono", monospace; }
+  .files-out { font: 12.5px "JetBrains Mono", monospace; color: var(--high); }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    .doc { border-right: 0; border-bottom: 1px solid var(--line); min-height: 60vh; }
+    .file, .meta { padding-right: 0; } .stamp { position: static; display: inline-block; margin-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Odwołania2JSON<span>odwołania KIO, pełnomocnictwa i przelewy do JSON</span></div>
+  <div class="status" id="status">Łączenie z serwerem…</div>
+  <button class="btn ghost" id="openCreator">Typy dokumentów</button>
+  <button class="btn" id="pick">Wczytaj PDF</button>
+  <input type="file" id="file" accept="application/pdf" hidden>
+</header>
+
+<main>
+  <div class="pane doc">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Wczytaj plik PDF">
+      <h2>Upuść tutaj dokument PDF</h2>
+      <p>Odwołanie do KIO, pełnomocnictwo albo potwierdzenie przelewu. Typ rozpoznamy automatycznie, także w skanach.</p>
+    </div>
+    <div class="pages hidden" id="pages" aria-label="Podgląd dokumentu"></div>
+  </div>
+
+  <div class="pane result">
+    <div class="result-head">
+      <div class="file" id="fname">Nie wczytano dokumentu</div>
+      <div class="meta" id="meta"></div>
+      <div class="stamp" id="stamp" aria-live="polite"></div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="fields">Dane</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="json">JSON</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="trace">Przebieg</button>
+    </div>
+    <div class="body" id="tab-fields"><p class="empty">Wczytaj dokument, a tutaj pojawią się wyodrębnione dane. Kliknij wartość, żeby zobaczyć, skąd pochodzi w dokumencie.</p></div>
+    <div class="body hidden" id="tab-json">
+      <div class="row">
+        <button class="btn" id="download" disabled>Pobierz JSON</button>
+        <button class="btn ghost" id="copy" disabled>Kopiuj</button>
+        <span class="msg" id="jsonmsg"></span>
+      </div>
+      <textarea id="json" spellcheck="false" aria-label="Wynik JSON (można edytować)"></textarea>
+    </div>
+    <div class="body hidden trace" id="tab-trace"><p class="empty">Tu zobaczysz, jak dokument został sklasyfikowany i skąd pochodzi każda wartość.</p></div>
+  </div>
+</main>
+
+
+<section class="creator hidden" id="creator" aria-labelledby="creatorTitle">
+  <div class="creator-inner">
+    <div class="row" style="justify-content:space-between;margin-top:0">
+      <div><h2 id="creatorTitle">Typy dokumentów</h2>
+      <p class="lead">Nowy typ dodajesz bez programowania: podajesz przykładowy wynik JSON i 2-3 przykładowe PDF-y. System przygotuje schemat, słowa do rozpoznawania typu, reguły i polecenie dla modelu, a potem sprawdzi je na twoich plikach.</p></div>
+      <button class="btn ghost" id="closeCreator">Wróć do ekstrakcji</button>
+    </div>
+
+    <div class="card"><h3>Obsługiwane typy</h3><table class="types-table" id="typesTable"></table><p class="msg" id="typesMsg"></p></div>
+
+    <div class="card">
+      <h3>Dodaj nowy typ</h3>
+      <div class="grid2">
+        <label class="f">Nazwa techniczna <span class="hint">małe litery, cyfry i _, np. faktura_vat</span><input type="text" id="cName" value="faktura_vat"></label>
+        <label class="f">Nazwa dla ludzi<input type="text" id="cDesc" value="Faktura VAT"></label>
+        <label class="f" style="grid-column:1/-1">Przykładowy wynik JSON <span class="hint">taki, jaki ma powstać z jednego z przykładowych PDF-ów; wartości z tego pliku pomagają nauczyć się etykiet</span>
+          <textarea id="cExample">{
+  "numer_faktury": "FV/2026/11/0042",
+  "data_wystawienia": "2026-11-05",
+  "sprzedawca": { "nazwa": "Kancelaria Radców Prawnych Lex sp. k.", "nip": "9995126748" },
+  "nabywca": { "nazwa": "Urząd Gminy Modrzewiec", "nip": "9990342967" },
+  "kwota_brutto": 2460.00
+}</textarea></label>
+        <label class="f" style="grid-column:1/-1">Przykładowe PDF-y (1-5)<input type="file" id="cFiles" accept="application/pdf" multiple></label>
+      </div>
+      <div class="row"><button class="btn" id="cDraft">Przygotuj typ</button><span class="msg" id="cMsg"></span></div>
+    </div>
+
+    <div class="card hidden" id="draftCard">
+      <h3>Propozycja konfiguracji</h3>
+      <p class="lead" style="margin-bottom:12px">Sprawdź i popraw, jeśli trzeba. Każda zmiana działa od razu po kliknięciu "Przetestuj ponownie".</p>
+      <div class="grid2">
+        <div><h3 style="font-size:14px">Pola i ich typy</h3><table class="fields-table" id="dFields"></table></div>
+        <div>
+          <label class="f">Słowa rozpoznające typ <span class="hint">jedno na linię: słowo = punkty; nagłówek dokumentu zaczyna się od "#"</span><textarea id="dKeywords" style="min-height:150px"></textarea></label>
+          <h3 style="font-size:14px;margin-top:12px">Reguły nauczone z przykładu</h3><div id="dRules" class="msg"></div>
+        </div>
+        <label class="f" style="grid-column:1/-1">Polecenie dla modelu<textarea id="dPrompt"></textarea></label>
+      </div>
+      <h3 style="font-size:14px;margin-top:16px">Test na przykładowych PDF-ach</h3>
+      <div id="dTests"></div>
+      <div class="row"><button class="btn ghost" id="dRetest">Przetestuj ponownie</button><button class="btn" id="dSave">Zapisz i włącz typ</button><span class="msg" id="dMsg"></span></div>
+    </div>
+  </div>
+</section>
+<script>
+const $ = s => document.querySelector(s);
+const LABELS = {
+  OdwolanieKIO: "Odwołanie", Odwolujacy: "Odwołujący", Zamawiajacy: "Zamawiający", ZamowieniePubliczne: "Zamówienie publiczne",
+  mocodawca: "Mocodawca", pelnomocnicy: "Pełnomocnicy", podpisujacy: "Podpisujący", przelew_bankowy: "Przelew",
+  pelnomocnik: "Pełnomocnik", data: "Data", czynnosc_dzien: "Data czynności", czynnosc_powod_id: "Kod czynności",
+  czynnosc_opis: "Zaskarżona czynność", miejscowosc: "Miejscowość", krs: "KRS", nip: "NIP", regon: "REGON",
+  nazwa: "Nazwa", "przez-pelnomocnika": "Przez pełnomocnika", imie_nazwisko: "Imię i nazwisko", mail: "E-mail",
+  prowadzacy_postepowanie: "Prowadzący postępowanie", numer_bzp: "Numer BZP", numer_postepowania: "Numer postępowania",
+  numer_ted: "Numer TED", tytul: "Tytuł", typ: "Typ", pesel: "PESEL", data_operacji: "Data operacji", kwota: "Kwota",
+  na_rachunek: "Na rachunek", z_rachunku: "Z rachunku", numer_transakcji: "Numer transakcji"
+};
+const STAMP = { odwolanie: "ODWOŁANIE", pelnomocnictwo: "PEŁNOMOCNICTWO", przelew: "PRZELEW" };
+const CONF_TEXT = { high: "Reguła", medium: "Model, wartość jest w tekście", low: "Model, nie znaleziono w tekście: sprawdź" };
+let current = null, fname = "wynik", prov = {}, typeNames = {};
+
+function esc(v) { return String(v).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+async function info() {
+  try {
+    const r = await (await fetch("/api/info")).json();
+    typeNames = r.types || {};
+    $("#status").innerHTML = `<span class="dot ${r.llm_available ? "on" : ""}"></span>` +
+      (r.llm_available ? `Model <b>${esc(r.model)}</b>` : "Brak klucza API: działają tylko reguły");
+  } catch { $("#status").textContent = "Serwer nie odpowiada"; }
+}
+
+/* ---------- podglad stron ---------- */
+function renderPages(res) {
+  const box = $("#pages"); box.innerHTML = "";
+  const pages = (res.provenance && res.provenance.pages) || [];
+  pages.forEach(p => {
+    const el = document.createElement("div");
+    el.className = "page"; el.id = "page-" + p.n; el.dataset.w = p.width; el.dataset.h = p.height;
+    el.innerHTML = `<img alt="Strona ${p.n}" src="/api/page/${res.doc_id}/${p.n}">` +
+      `<span class="no">str. ${p.n}</span>` + (p.scan ? `<span class="scan">skan, odczyt modelem</span>` : "");
+    box.appendChild(el);
+  });
+  (res.provenance ? res.provenance.fields : []).forEach(f => {
+    if (!f.page) return;
+    const pg = document.getElementById("page-" + f.page); if (!pg) return;
+    f.rects.forEach(r => {
+      const d = document.createElement("div");
+      d.className = "hl " + f.confidence; d.dataset.path = f.path;
+      d.style.left = (r[0] / pg.dataset.w * 100) + "%"; d.style.top = (r[1] / pg.dataset.h * 100) + "%";
+      d.style.width = ((r[2] - r[0]) / pg.dataset.w * 100) + "%"; d.style.height = ((r[3] - r[1]) / pg.dataset.h * 100) + "%";
+      pg.appendChild(d);
+    });
+  });
+  box.classList.remove("hidden"); $("#drop").classList.add("hidden");
+}
+
+function focusField(path) {
+  document.querySelectorAll(".hl.active").forEach(h => h.classList.remove("active"));
+  const hits = document.querySelectorAll(`.hl[data-path="${CSS.escape(path)}"]`);
+  if (!hits.length) return;
+  hits.forEach(h => { h.classList.remove("active"); void h.offsetWidth; h.classList.add("active"); });
+  hits[0].scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+}
+
+/* ---------- pola ---------- */
+function renderObj(obj, path) {
+  let html = "<dl>", nested = "";
+  for (const [k, v] of Object.entries(obj)) {
+    const p = path ? `${path}.${k}` : k;
+    if (v && typeof v === "object") { nested += renderGroup(k, v, p, true); continue; }
+    const f = prov[p];
+    const conf = v === null ? "" : (f ? f.confidence : "");
+    const val = v === null ? `<span class="null">brak</span>` : esc(v);
+    const where = f && f.page ? `<span class="where">str. ${f.page}</span>` : "";
+    const click = f && f.page ? ` class="clickable" tabindex="0" data-path="${esc(p)}"` : "";
+    html += `<dt>${LABELS[k] || esc(k)}</dt><dd data-conf="${conf}"${click} title="${conf ? CONF_TEXT[conf] : ""}"><span class="v">${val}</span>${where}</dd>`;
+  }
+  return html + "</dl>" + nested;
+}
+
+function renderGroup(k, v, path, sub) {
+  const title = LABELS[k] || esc(k);
+  if (Array.isArray(v)) {
+    if (!v.length) return `<section class="group"><h3>${title}</h3><p class="item-label">Brak pozycji</p></section>`;
+    return `<section class="group"><h3>${title}</h3>` + v.map((it, i) =>
+      (v.length > 1 ? `<div class="item-label">Pozycja ${i + 1} z ${v.length}</div>` : "") +
+      (typeof it === "object" ? renderObj(it, `${path}[${i}]`) : esc(it))).join("") + "</section>";
+  }
+  return sub ? `<div class="item-label">${title}</div>${renderObj(v, path)}`
+             : `<section class="group"><h3>${title}</h3>${renderObj(v, path)}</section>`;
+}
+
+function renderTop(result) {
+  // pola proste na najwyzszym poziomie (np. w typach z kreatora) w jednej grupie, obiekty i listy osobno
+  const scal = Object.fromEntries(Object.entries(result).filter(([, v]) => v === null || typeof v !== "object"));
+  return (Object.keys(scal).length ? `<section class="group"><h3>Dane podstawowe</h3>${renderObj(scal, "")}</section>` : "") +
+    Object.entries(result).filter(([, v]) => v !== null && typeof v === "object").map(([k, v]) => renderGroup(k, v, k, false)).join("");
+}
+
+function render(res) {
+  current = res;
+  prov = {}; (res.provenance ? res.provenance.fields : []).forEach(f => prov[f.path] = f);
+  const t = res.trace, result = res.result;
+  const stamp = $("#stamp");
+  stamp.className = "stamp"; void stamp.offsetWidth;
+  stamp.textContent = res.type ? STAMP[res.type] || (typeNames[res.type] || res.type).toUpperCase() : "SPOZA KLAS";
+  stamp.classList.add("show"); if (!res.type) stamp.classList.add("unknown");
+
+  const fs = Object.values(prov), cnt = c => fs.filter(f => f.confidence === c).length;
+  const llm = t.llm ? `model ${(t.llm.tokens_in || 0) + (t.llm.tokens_out || 0)} tokenów` : "bez modelu";
+  $("#meta").innerHTML = `${t.pages} str.${t.scan_pages.length ? `, skan: ${t.scan_pages.join(", ")}` : ""}, ${llm}, ${t.seconds} s` +
+    (fs.length ? `<br><b>${fs.length}</b> wartości: ${cnt("high")} z reguł, ${cnt("medium")} z modelu potwierdzone w tekście` +
+      (cnt("low") ? `, <b style="color:var(--low)">${cnt("low")} do sprawdzenia</b>` : "") : "");
+
+  renderPages(res);
+  $("#tab-fields").innerHTML = !res.type
+    ? `<p class="empty">Dokument nie pasuje do żadnej z klas. Zapisany wynik to pusty obiekt <code>{}</code>.</p>`
+    : `<div class="legend"><span><i class="sw high"></i>${CONF_TEXT.high}</span><span><i class="sw medium"></i>${CONF_TEXT.medium}</span><span><i class="sw low"></i>${CONF_TEXT.low}</span></div>` +
+      renderTop(result);
+  document.querySelectorAll("dd.clickable").forEach(d => {
+    d.onclick = () => focusField(d.dataset.path);
+    d.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); focusField(d.dataset.path); } };
+  });
+
+  $("#json").value = JSON.stringify(result, null, 2);
+  $("#download").disabled = $("#copy").disabled = false;
+  $("#jsonmsg").textContent = "";
+
+  const list = a => a.length ? `<ul>${a.map(x => `<li>${esc(typeof x === "string" ? x : JSON.stringify(x))}</li>`).join("")}</ul>` : "<p>Brak</p>";
+  const sc = Object.entries(t.classification.scores).map(([k, v]) => `${k}: ${v}`);
+  $("#tab-trace").innerHTML =
+    `<h4>Klasyfikacja (punkty)</h4>${list(sc)}<h4>Trafienia słów kluczowych</h4>${list(t.classification.hits || [])}` +
+    `<h4>Użyte reguły</h4>${list(t.rules)}<h4>Odrzucone wartości</h4>${list(t.dropped)}` +
+    `<h4>Ostrzeżenia</h4>${list(t.warnings.concat(t.validation))}<h4>OCR</h4>${list(t.ocr)}` +
+    `<h4>Tekst przekazany do analizy</h4><pre class="text">${esc(res.text || "")}</pre>`;
+}
+
+async function upload(file) {
+  if (!file || !/pdf$/i.test(file.type || file.name)) { $("#fname").textContent = "To nie jest plik PDF. Wybierz plik z rozszerzeniem .pdf."; return; }
+  fname = file.name.replace(/\.pdf$/i, "");
+  $("#fname").innerHTML = `<span class="busy"></span>Analizuję ${esc(file.name)}…`;
+  $("#meta").textContent = ""; $("#stamp").className = "stamp";
+  $("#pick").disabled = true;
+  try {
+    const fd = new FormData(); fd.append("file", file);
+    const r = await fetch("/api/extract", { method: "POST", body: fd });
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.error || r.statusText);
+    $("#fname").textContent = file.name;
+    render(res);
+  } catch (e) {
+    $("#fname").innerHTML = `<span class="msg err">Analiza nie powiodła się: ${esc(e.message)}. Sprawdź, czy serwer działa, i wczytaj plik ponownie.</span>`;
+  } finally { $("#pick").disabled = false; info(); }
+}
+
+$("#pick").onclick = () => $("#file").click();
+$("#drop").onclick = () => $("#file").click();
+$("#drop").onkeydown = e => { if (e.key === "Enter" || e.key === " ") $("#file").click(); };
+$("#file").onchange = e => upload(e.target.files[0]);
+["dragover", "dragenter"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $("#drop").classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => { e.preventDefault(); $("#drop").classList.remove("over"); }));
+document.addEventListener("drop", e => upload(e.dataTransfer.files[0]));
+
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === b));
+  ["fields", "json", "trace"].forEach(n => $("#tab-" + n).classList.toggle("hidden", n !== b.dataset.tab));
+});
+
+$("#json").oninput = () => {
+  try { JSON.parse($("#json").value); $("#jsonmsg").className = "msg ok"; $("#jsonmsg").textContent = "Poprawny JSON"; $("#download").disabled = false; }
+  catch (e) { $("#jsonmsg").className = "msg err"; $("#jsonmsg").textContent = "Błąd składni: " + e.message; $("#download").disabled = true; }
+};
+$("#download").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([$("#json").value], { type: "application/json" }));
+  a.download = fname + ".json"; a.click();
+};
+$("#copy").onclick = async () => { await navigator.clipboard.writeText($("#json").value); $("#jsonmsg").className = "msg ok"; $("#jsonmsg").textContent = "Skopiowano"; };
+
+/* ---------- kreator typow ---------- */
+const KINDS = ["text","date","amount","nip","krs","regon","pesel","iban","email","person","org_name","int"];
+const KIND_PL = {text:"tekst",date:"data",amount:"kwota",nip:"NIP",krs:"KRS",regon:"REGON",pesel:"PESEL",iban:"rachunek",email:"e-mail",person:"imię i nazwisko",org_name:"nazwa podmiotu",int:"liczba całkowita"};
+let draftObj = null;
+
+async function loadTypes(keepMsg) {
+  if (!keepMsg) $("#typesMsg").textContent = "";
+  const list = await (await fetch("/api/types")).json();
+  const arch = await (await fetch("/api/types/archive")).json();
+  $("#typesTable").innerHTML = "<tr><th>Typ</th><th>Nazwa techniczna</th><th>Pochodzenie</th><th>Włączony</th><th></th></tr>" + list.map(t =>
+    `<tr><td>${esc(t.description)}</td><td><code>${esc(t.name)}</code></td>` +
+    `<td>${t.builtin ? '<span class="badge">wbudowany</span>' : '<span class="badge new">dodany konfiguracją</span>'}</td>` +
+    `<td>${t.builtin ? "tak" : `<input type="checkbox" data-type="${esc(t.name)}" ${t.enabled ? "checked" : ""} aria-label="Włącz typ ${esc(t.name)}">`}</td>` +
+    `<td>${t.builtin ? "" : `<button class="btn ghost" data-del="${esc(t.name)}">Usuń do archiwum</button>`}</td></tr>`).join("") +
+    (arch.length ? `<tr><th colspan="5" style="padding-top:18px">Archiwum (usunięte typy, można przywrócić)</th></tr>` + arch.map(a =>
+      `<tr><td>${esc(a.description)}</td><td><code>${esc(a.name)}</code></td><td colspan="2" class="msg">${esc(a.id)}</td>` +
+      `<td><button class="btn ghost" data-restore="${esc(a.id)}">Przywróć</button></td></tr>`).join("") : "");
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const r = await fetch(`/api/types/${b.dataset.del}`, { method: "DELETE" }); const d = await r.json();
+    $("#typesMsg").className = r.ok ? "msg ok" : "msg err";
+    $("#typesMsg").textContent = r.ok ? `Typ „${b.dataset.del}” przeniesiono do archiwum (configs/archiwum/${d.archived}). Możesz go przywrócić.` : d.error;
+    loadTypes(true);
+  });
+  document.querySelectorAll("[data-restore]").forEach(b => b.onclick = async () => {
+    const r = await fetch(`/api/types/archive/${b.dataset.restore}/restore`, { method: "POST" }); const d = await r.json();
+    $("#typesMsg").className = r.ok ? "msg ok" : "msg err";
+    $("#typesMsg").textContent = r.ok ? `Przywrócono typ „${d.restored.join(", ")}”. Działa od razu.` : d.error;
+    loadTypes(true);
+  });
+  document.querySelectorAll("#typesTable input[type=checkbox]").forEach(c => c.onchange = async () => {
+    await fetch(`/api/types/${c.dataset.type}/enabled`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ enabled: c.checked }) });
+    loadTypes();
+  });
+}
+
+function kwToText(cl) {
+  return Object.entries(cl.title || {}).map(([k, v]) => `# ${k} = ${v}`).concat(Object.entries(cl.keywords || {}).map(([k, v]) => `${k} = ${v}`)).join("\n");
+}
+function textToKw(txt) {
+  const title = {}, keywords = {};
+  txt.split("\n").map(l => l.trim()).filter(Boolean).forEach(l => {
+    const isTitle = l.startsWith("#"); const [w, n] = l.replace(/^#\s*/, "").split("=").map(x => x.trim());
+    if (w) (isTitle ? title : keywords)[w.toLowerCase()] = Number(n) || 2;
+  });
+  return { title, keywords };
+}
+
+function renderDraft(d) {
+  draftObj = d;
+  $("#dFields").innerHTML = Object.entries(d.fields).map(([p, k]) =>
+    `<tr><td><code>${esc(p)}</code></td><td><select data-path="${esc(p)}">${KINDS.map(x => `<option value="${x}" ${x === k ? "selected" : ""}>${KIND_PL[x]}</option>`).join("")}</select></td></tr>`).join("");
+  $("#dKeywords").value = kwToText(d.classify);
+  const learned = (d.rules[0] || {}).fields || {};
+  $("#dRules").innerHTML = Object.keys(learned).length
+    ? "<ul>" + Object.entries(learned).map(([p, r]) => `<li><code>${esc(p)}</code> stoi po etykiecie „${esc(r.labels[0])}”</li>`).join("") + "</ul>"
+    : "Nie znaleziono etykiet: wszystkie pola wyciągnie model.";
+  $("#dPrompt").value = d.prompt;
+  $("#dTests").innerHTML = (d.test || []).map(t => {
+    const ok = t.type === d.name;
+    return `<div class="test ${ok ? "ok" : "bad"}"><b>${esc(t.file)}</b>: ${ok ? "rozpoznany jako nowy typ" : `rozpoznany jako „${esc(t.type || "spoza klas")}”: dodaj słowa rozpoznające`}` +
+      ` <span class="msg">(punkty: ${Object.entries(t.scores).map(([k, v]) => `${esc(k)} ${v}`).join(", ")})</span>` +
+      (t.warnings && t.warnings.length ? `<div class="msg">${esc(t.warnings.join("; "))}</div>` : "") +
+      `<pre>${esc(JSON.stringify(t.result, null, 2))}</pre></div>`;
+  }).join("") || '<p class="msg">Brak przykładowych PDF-ów do testu.</p>';
+  $("#draftCard").classList.remove("hidden");
+}
+
+function collectDraft() {
+  const d = JSON.parse(JSON.stringify(draftObj));
+  document.querySelectorAll("#dFields select").forEach(s => d.fields[s.dataset.path] = s.value);
+  const kw = textToKw($("#dKeywords").value);
+  d.classify.title = kw.title; d.classify.keywords = kw.keywords;
+  d.prompt = $("#dPrompt").value;
+  delete d.test;
+  return d;
+}
+
+$("#openCreator").onclick = () => { $("#creator").classList.remove("hidden"); loadTypes(); };
+$("#closeCreator").onclick = () => { $("#creator").classList.add("hidden"); info(); };
+$("#cDraft").onclick = async () => {
+  $("#cMsg").className = "msg"; $("#cMsg").innerHTML = '<span class="busy"></span>Przygotowuję i testuję…';
+  const fd = new FormData();
+  fd.append("name", $("#cName").value); fd.append("description", $("#cDesc").value); fd.append("example", $("#cExample").value);
+  [...$("#cFiles").files].forEach(f => fd.append("files", f));
+  try {
+    const r = await fetch("/api/types/draft", { method: "POST", body: fd }); const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    $("#cMsg").textContent = ""; renderDraft(d); $("#draftCard").scrollIntoView({ behavior: "smooth" });
+  } catch (e) { $("#cMsg").className = "msg err"; $("#cMsg").textContent = e.message; }
+};
+$("#dRetest").onclick = async () => {
+  $("#dMsg").className = "msg"; $("#dMsg").innerHTML = '<span class="busy"></span>Testuję…';
+  try {
+    const r = await fetch("/api/types/retest", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(collectDraft()) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || r.statusText);
+    $("#dMsg").textContent = ""; renderDraft(d);
+  } catch (e) { $("#dMsg").className = "msg err"; $("#dMsg").textContent = e.message; }
+};
+$("#dSave").onclick = async () => {
+  try {
+    const r = await fetch("/api/types/save", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(collectDraft()) });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || r.statusText);
+    $("#dMsg").className = "msg ok";
+    $("#dMsg").innerHTML = `Zapisano i włączono. Typ działa od teraz w GUI i w CLI. Pliki: <span class="files-out">${d.saved.map(esc).join(", ")}</span>`;
+    loadTypes();
+  } catch (e) { $("#dMsg").className = "msg err"; $("#dMsg").textContent = e.message; }
+};
+info();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "numer_faktury": "FV/2026/11/0042",
+  "data_wystawienia": "2026-11-05",
+  "sprzedawca": { "nazwa": "Kancelaria Radców Prawnych Lex sp. k.", "nip": "9995126748" },
+  "nabywca": { "nazwa": "Urząd Gminy Modrzewiec", "nip": "9990342967" },
+  "kwota_brutto": 2460.00
+}

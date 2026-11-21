@@ -1,0 +1,26 @@
+# DEMO rozszerzalnosci: czwarta klasa dodana wylacznie konfiguracja.
+# Aby wlaczyc: zmien enabled na true. Kod zrodlowy pozostaje bez zmian.
+document_types:
+  faktura:
+    enabled: false
+    description: Faktura VAT
+    schema: schemas/faktura.schema.json
+    prompt: prompts/faktura.txt
+    llm: fallback
+    required: [numer, data_wystawienia, kwota_brutto]
+    classify:
+      title: {"faktura": 6}
+      keywords: {"sprzedawca": 2, "nabywca": 2, "nettoo": 1, "brutto": 2, "stawkavat": 2, "terminpłatności": 1}
+      negative: {"odwołujący": 4, "ustanawiampełnomocnik": 6}
+    rules:
+      - extractor: labels
+        fields:
+          numer: {type: ref, labels: ["Faktura VAT nr", "Faktura nr", "Numer faktury"]}
+          data_wystawienia: {type: date, labels: ["Data wystawienia"]}
+          kwota_brutto: {type: amount, labels: ["Razem do zapłaty", "Do zapłaty", "Kwota brutto"]}
+          nip_sprzedawcy: {type: text, labels: ["NIP sprzedawcy"]}
+    fields:
+      numer: text
+      data_wystawienia: date
+      kwota_brutto: amount
+      nip_sprzedawcy: nip
