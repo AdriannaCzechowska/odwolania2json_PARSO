@@ -22,6 +22,6 @@ bash run.sh
 
 ## Interfejs graficzny (opcjonalnie)
 
-`http://<adres-serwera>:8000` - wgranie PDF, podgląd dokumentu z zaznaczonymi polami, JSON do pobrania, kreator nowych typów dokumentów (na serwerze w trybie demonstracyjnym, bez zapisu).
+`http://<adres-serwera>:8000` - wgranie PDF, podgląd dokumentu z zaznaczonymi polami, edycja wartości i zatwierdzenie dokumentu, JSON do pobrania, widok Sprawa (zgodność dokumentów jednej sprawy), kreator nowych typów dokumentów (na serwerze w trybie demonstracyjnym, bez zapisu).
 
 Szczegóły: `README.md`.

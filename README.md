@@ -70,6 +70,10 @@ PDF ─► PyMuPDF (warstwa tekstowa, 4 pierwsze strony)
 - **Licznik tokenów i kosztu** jest w `core/llm.py`. Limit aplikacyjny to `session_budget_usd`.
 - **Transparentność:** zakładka „Przebieg” w GUI i opcja `--trace` pokazują wynik klasyfikacji, użyte reguły, źródło każdej wartości, odrzucone wartości i ostrzeżenia.
 
+## Weryfikacja przez urzędnika (GUI)
+
+W zakładce **Dane** każda wartość ma kolor źródła: reguła, model (wartość znaleziona w tekście) albo model bez potwierdzenia w tekście (do sprawdzenia). Kliknięcie wartości podświetla jej miejsce w PDF-ie. Przycisk **Edytuj** przy wartości pozwala ją poprawić, a **Zatwierdź dokument** oznacza cały dokument jako sprawdzony przez urzędnika. Poprawki od razu trafiają do JSON-a do pobrania; zatwierdzenie nie dodaje do niego żadnych pól.
+
 ## Sprawa: kilka dokumentów naraz (GUI)
 
 Przycisk **Sprawa** w GUI przyjmuje naraz dokumenty jednej sprawy (odwołanie, pełnomocnictwo, potwierdzenie przelewu). Każdy dokument dostaje swój JSON, a program sprawdza zgodność danych między dokumentami, np.:
