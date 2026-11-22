@@ -130,6 +130,42 @@
   .checks .vals b { color: var(--ink); font-weight: 500; }
   .summary { font-stretch: 112%; font-size: 17px; font-weight: 700; margin: 0 0 6px; }
 
+  /* --- dopracowanie wedlug zasad Apple (skill apple-design): reakcja, orientacja, typografia, dostepnosc --- */
+  .btn { transition: transform 100ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out; }
+  .btn:hover:not(:disabled) { box-shadow: 0 1px 3px rgba(29,39,64,.18); }
+  .btn:active:not(:disabled) { transform: scale(0.97); }
+  .btn.ghost:hover:not(:disabled) { background: #EEF1F8; }
+  dd.clickable { transition: background-color 120ms ease-out; border-radius: var(--r-sm); }
+  dd.clickable:hover { background: #F3F5FA; }
+  dd.clickable:active { background: #E6EAF4; }
+  .drop { transition: border-color 120ms ease-out, background-color 120ms ease-out; }
+  .drop:hover { border-color: var(--stamp); }
+  .drop h2, .creator h2 { letter-spacing: -0.02em; line-height: 1.15; }
+  .brand { letter-spacing: -0.02em; }
+  header { height: 61px; flex-wrap: nowrap; }
+  header > *, .nav button, .btn { white-space: nowrap; }
+  .status { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  @media (max-width: 1360px) { .brand span { display: none; } }
+  @media (max-width: 1000px) { .status { display: none; } }
+  /* nawigacja: gdzie jestem i dokad moge przejsc */
+  .nav { display: flex; gap: 2px; padding: 3px; background: var(--paper); border: 1px solid var(--line); border-radius: 7px; }
+  .nav button { border: 0; background: transparent; color: var(--ink-soft); font-weight: 600; padding: 6px 14px; border-radius: 5px; cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out, transform 100ms ease-out; }
+  .nav button:hover { color: var(--ink); }
+  .nav button:active { transform: scale(0.97); }
+  .nav button[aria-current="page"] { background: var(--sheet); color: var(--ink); box-shadow: 0 1px 2px rgba(29,39,64,.16); }
+  /* ekrany Sprawa i Typy: krotkie pojawienie sie z gory, w tym samym kierunku co nawigacja */
+  .creator:not(.hidden) { animation: enter 180ms ease-out; }
+  @keyframes enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .creator:not(.hidden) { animation: none; }
+    .btn, .nav button, dd.clickable { transition: none; }
+    .btn:active:not(:disabled), .nav button:active { transform: none; }
+  }
+  @media (prefers-contrast: more) {
+    :root { --line: #7A8599; --ink-soft: #39425A; }
+    .nav button[aria-current="page"] { outline: 2px solid var(--ink); }
+  }
+
   /* kreator typow dokumentow */
   .creator { position: fixed; inset: 61px 0 0 0; background: var(--paper); overflow: auto; z-index: 5; }
   .creator-inner { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
@@ -167,8 +203,11 @@
 <header>
   <div class="brand">Odwołania2JSON<span>odwołania KIO, pełnomocnictwa i przelewy do JSON</span></div>
   <div class="status" id="status">Łączenie z serwerem…</div>
-  <button class="btn ghost" id="openCase">Sprawa</button>
-  <button class="btn ghost" id="openCreator">Typy dokumentów</button>
+  <nav class="nav" aria-label="Widoki">
+    <button type="button" id="navMain" aria-current="page">Ekstrakcja</button>
+    <button type="button" id="openCase">Sprawa</button>
+    <button type="button" id="openCreator">Typy dokumentów</button>
+  </nav>
   <button class="btn" id="pick">Wczytaj PDF</button>
   <input type="file" id="file" accept="application/pdf" hidden>
 </header>
@@ -427,7 +466,7 @@ async function upload(file) {
   } finally { $("#pick").disabled = false; info(); }
 }
 
-$("#pick").onclick = () => $("#file").click();
+$("#pick").onclick = () => { setView("main"); $("#file").click(); };
 $("#drop").onclick = () => $("#file").click();
 $("#drop").onkeydown = e => { if (e.key === "Enter" || e.key === " ") $("#file").click(); };
 $("#file").onchange = e => upload(e.target.files[0]);
@@ -591,8 +630,17 @@ function renderCase(res) {
     <span class="vals">${esc(c.detail)}. ${esc(STAMP[c.left_type] || c.left_type)}: ${show(c.left)} · ${esc(STAMP[c.right_type] || c.right_type)}: ${show(c.right)}</span></li>`).join("");
   $("#caseChecksCard").classList.remove("hidden"); $("#caseDocsCard").classList.remove("hidden");
 }
-$("#openCase").onclick = () => $("#case").classList.remove("hidden");
-$("#closeCase").onclick = () => $("#case").classList.add("hidden");
+function setView(v) {
+  $("#case").classList.toggle("hidden", v !== "case");
+  $("#creator").classList.toggle("hidden", v !== "creator");
+  [["navMain", "main"], ["openCase", "case"], ["openCreator", "creator"]].forEach(([id, name]) =>
+    name === v ? $("#" + id).setAttribute("aria-current", "page") : $("#" + id).removeAttribute("aria-current"));
+  if (v === "creator") loadTypes();
+  if (v === "main") info();
+}
+$("#navMain").onclick = () => setView("main");
+$("#openCase").onclick = () => setView("case");
+$("#closeCase").onclick = () => setView("main");
 $("#caseRun").onclick = async () => {
   const files = $("#caseFiles").files;
   if (!files.length) { $("#caseMsg").className = "msg err"; $("#caseMsg").textContent = "Wybierz pliki PDF sprawy (od 2 do 10)."; return; }
@@ -607,8 +655,8 @@ $("#caseRun").onclick = async () => {
   finally { $("#caseRun").disabled = false; }
 };
 
-$("#openCreator").onclick = () => { $("#creator").classList.remove("hidden"); loadTypes(); };
-$("#closeCreator").onclick = () => { $("#creator").classList.add("hidden"); info(); };
+$("#openCreator").onclick = () => setView("creator");
+$("#closeCreator").onclick = () => setView("main");
 $("#cDraft").onclick = async () => {
   $("#cMsg").className = "msg"; $("#cMsg").innerHTML = '<span class="busy"></span>Przygotowuję i testuję…';
   const fd = new FormData();
