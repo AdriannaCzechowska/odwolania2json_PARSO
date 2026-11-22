@@ -268,3 +268,63 @@ def fix_place(value, doc_text: str):
         if fold(place) == key:
             return place
     return value
+
+
+# --- dociaganie nazw do brzmienia z dokumentu (UZP: nazwa firmy "jak w dokumencie") ---
+_FORMS = [
+    ["spółka z ograniczoną odpowiedzialnością", "sp. z o.o.", "sp. z o. o.", "sp.z o.o.", "spółka z o.o."],
+    ["spółka akcyjna", "s.a."],
+    ["spółka komandytowo-akcyjna", "s.k.a.", "sp. k.a."],
+    ["spółka komandytowa", "sp. k.", "sp.k."],
+    ["spółka jawna", "sp. j.", "sp.j."],
+    ["spółka partnerska", "sp. p.", "sp.p."],
+]
+_FORM_RE = re.compile(r"^[\s,]*(" + "|".join(
+    re.escape(f).replace(r"\ ", r"\s*") for g in _FORMS for f in sorted(g, key=len, reverse=True)) + r")", re.I)
+_TAIL_RE = re.compile(r"[\s,]*(" + "|".join(
+    re.escape(f).replace(r"\ ", r"\s*") for g in _FORMS for f in sorted(g, key=len, reverse=True)) + r")\s*$", re.I)
+
+
+def _collapse(s):
+    return " ".join(str(s).split())
+
+
+def snap_org(value, text):
+    """Nazwa podmiotu w brzmieniu z dokumentu. Zmienia tylko forme prawna, gdy model ja skrocil
+    albo rozwinal ("Sp. z o.o." <-> "spółka z ograniczoną odpowiedzialnością"); rdzen nazwy musi
+    wystepowac w tekscie. Gdy dokument zawiera kilka wariantow, wybiera najpelniejszy (tak jak wzorce UZP)."""
+    if not value or not text:
+        return value
+    t = _collapse(text)
+    tl, v = t.lower(), _collapse(value)
+    m = _TAIL_RE.search(v)
+    if not m:
+        return value                      # bez formy prawnej nic nie zmieniamy
+    core = v[:m.start()].strip(" ,")
+    if len(core) < 4:
+        return value
+    found, start = [], 0
+    while True:
+        i = tl.find(core.lower(), start)
+        if i < 0:
+            break
+        f = _FORM_RE.match(t[i + len(core):i + len(core) + 60])
+        if f:
+            found.append(t[i:i + len(core) + f.end()].strip(" ,"))
+        start = i + 1
+    if not found:
+        return value
+    return max(found, key=len)
+
+
+def snap_person(value, text):
+    """Imie i nazwisko w kolejnosci z dokumentu ("Kaczmarek Weronika" -> "Weronika Kaczmarek"),
+    tylko gdy odwrocona kolejnosc wystepuje w tekscie doslownie."""
+    if not value or not text:
+        return value
+    tl, v = _collapse(text).lower(), _collapse(value)
+    parts = v.split(" ")
+    if v.lower() in tl or len(parts) not in (2, 3):
+        return value
+    rev = " ".join(parts[-1:] + parts[:-1])
+    return rev if rev.lower() in tl else value

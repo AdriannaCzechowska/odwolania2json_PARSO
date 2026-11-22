@@ -74,7 +74,7 @@ document_types:
       Odwolujacy[].nazwa: org_name
       Odwolujacy[].przez-pelnomocnika: int01
       Odwolujacy[].pelnomocnik.imie_nazwisko: first_person
-      Odwolujacy[].pelnomocnik.nazwa: text
+      Odwolujacy[].pelnomocnik.nazwa: org_name
       Odwolujacy[].pelnomocnik.mail: email
       Zamawiajacy[].krs: krs
       Zamawiajacy[].nip: nip

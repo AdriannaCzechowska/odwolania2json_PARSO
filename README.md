@@ -98,7 +98,7 @@ Wynik na wszystkich danych treningowych UZP (`--split all`: 60 spraw, 30 skanów
 
 | Typ | F1 |
 |---|---|
-| odwołanie | 0.973 |
+| odwołanie | 0.974 |
 | pełnomocnictwo | 0.998 |
 | potwierdzenie przelewu | 0.998 |
 | dokumenty spoza klas (`{}`) | 1.000 |
@@ -137,10 +137,10 @@ Sprawdzenie na prawdziwych skanach UZP (`dane/skany`, 30 dokumentów) i na tych 
 
 | Skany UZP | F1 |
 |---|---|
-| proste | 0.953 |
+| proste | 0.957 |
 | odwrócone o 180° | 0.952 |
 
-Pieczątka wpływu ("WPŁYNĘŁO dnia ... L.dz.") nie jest brana za miejscowość i datę pisma.
+Pieczątka wpływu ("WPŁYNĘŁO dnia ... L.dz.") nie jest brana za miejscowość i datę pisma. Nazwy firm i osób są dociągane do brzmienia z dokumentu: forma prawna (np. "Sp. z o.o." albo pełna "spółka z ograniczoną odpowiedzialnością") i kolejność imienia i nazwiska, tylko gdy dany wariant występuje w tekście.
 
 Model 3B (`ministral-3b-2512`) dał na całym zbiorze F1 0.976 wobec 0.983 dla 8B, a na pełnomocnictwach 0.952 wobec 0.998, więc zostaliśmy przy 8B.
 

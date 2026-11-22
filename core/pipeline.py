@@ -11,7 +11,7 @@ from .classify import classify
 from .config import load_config
 from .extractors import run_rules
 from .llm import LLM, BudgetExceeded, LLMUnavailable
-from .normalize import GROUNDED, NORMALIZERS, digit_runs, fix_place, grounded
+from .normalize import GROUNDED, NORMALIZERS, digit_runs, fix_place, grounded, snap_org, snap_person
 
 PIPELINE_VERSION = "1"
 
@@ -237,6 +237,10 @@ class Extractor:
                 new = norm(value) if value is not None else None
                 if kind == "place" and new is not None:
                     new = fix_place(new, doc.plain)
+                if kind == "org_name" and new is not None:
+                    new = snap_org(new, doc.plain)
+                if kind in ("person", "first_person") and new is not None:
+                    new = snap_person(new, doc.plain)
                 if kind == "iban" and new is not None and new.isdigit() and dt.raw.get("options", {}).get("iban_prefix", True):
                     new = _iban_as_in_document(new, compact_src)
                 if kind in GROUNDED and new is not None and not grounded(kind, new, runs, src_lower):
