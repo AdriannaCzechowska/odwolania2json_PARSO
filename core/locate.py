@@ -85,6 +85,7 @@ def provenance(pdf_path, doc, result, dt, rule_values, fill_applied, derived, ru
         if d["source"] in evidence:
             evidence.setdefault(d["target"], evidence[d["source"]])
     rule_fields = set(rule_values) | set(fill_applied)
+    enums = _enum_values(dt.schema)
     for path, value in _leaves(result):
         if value is None:
             continue
@@ -121,8 +122,8 @@ def provenance(pdf_path, doc, result, dt, rule_values, fill_applied, derived, ru
         found = bool(rects) or any(fold(v) in text_folded for v in variants(kind, value) if len(str(v)) > 2)
         if source in ("rule", "derived"):
             confidence = "high"
-        elif kind in ("int01", "int"):
-            confidence = "medium"          # decyzja modelu, nie da sie wskazac w tekscie
+        elif kind in ("int01", "int") or value in enums:
+            confidence = "medium"          # decyzja modelu (np. wartosc ze slownika), nie da sie wskazac w tekscie
         else:
             confidence = "medium" if found else "low"
         out.append({"path": path, "value": value, "source": source, "page": page_no, "rects": rects,
@@ -130,3 +131,16 @@ def provenance(pdf_path, doc, result, dt, rule_values, fill_applied, derived, ru
     if pdoc is not None:
         pdoc.close()
     return {"fields": out, "pages": pages}
+
+
+def _enum_values(schema) -> set:
+    """Wartosci slownikowe ze schematu (np. osoba_prawna): model je wybiera, w tekscie ich nie ma."""
+    out = set()
+    if isinstance(schema, dict):
+        out |= {v for v in schema.get("enum", []) if isinstance(v, str)}
+        for v in schema.values():
+            out |= _enum_values(v)
+    elif isinstance(schema, list):
+        for v in schema:
+            out |= _enum_values(v)
+    return out

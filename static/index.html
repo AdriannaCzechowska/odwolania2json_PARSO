@@ -244,6 +244,19 @@
   .result dl, .result dt, .result dd { border-color: var(--r-line); }
   .result dd .null { color: #7D89AD; }
   .result dd[data-conf="low"] { background: rgba(229,65,74,.16); }
+  /* weryfikacja przez urzednika: zatwierdz albo popraw wartosc */
+  .review-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
+  .review-bar .legend { margin-bottom: 8px; }
+  .review-bar .btn { flex: none; }
+  .result .review-bar .btn.ghost { color: #fff; border-color: rgba(255,255,255,.55); }
+  .approved { display: inline-block; margin-top: 6px; color: #4ADE80; font-weight: 700; }
+  dd .acts { display: inline-flex; gap: 4px; opacity: 0; transition: opacity 120ms ease-out; }
+  dd:hover .acts, dd:focus-within .acts { opacity: 1; }
+  dd .acts button { font: 600 12px Archivo, sans-serif; padding: 3px 9px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+    border: 1px solid rgba(255,255,255,.45); background: transparent; color: #fff; }
+  dd .acts button:hover { background: rgba(255,255,255,.12); }
+  dd input.edit { flex: 1; min-width: 0; font: inherit; color: #111; background: #fff; border: 2px solid #7DD3FC; border-radius: 6px; padding: 3px 8px; }
+  @media (hover: none) { dd .acts { opacity: 1; } }
   .result dd.clickable:hover { background: rgba(255,255,255,.06); }
   .result dd.clickable:active { background: rgba(255,255,255,.11); }
   .result .tab { color: var(--r-soft); }
@@ -284,6 +297,13 @@
   .creator .creator-inner > .row:first-child .btn.ghost { margin-right: 23px; }
   .result .stamp { font-size: 22px; padding: 5px 11px 4px; }
   .result .file, .result .meta { padding-right: 290px; }
+  /* pieczatka: Bebas Neue jak tytuly, wieksza, wysrodkowana w pionie, z marginesem od prawej */
+  .result .stamp { top: 50%; right: 32px; font-family: "Bebas Neue", Oswald, sans-serif; font-weight: 400; font-stretch: normal; font-size: 44px; line-height: 1;
+    letter-spacing: .04em; padding: 8px 16px 4px; border-width: 3px; transform: translateY(-50%) rotate(-6deg) scale(1.4); }
+  .result .stamp.show { animation: stamp2 .32s cubic-bezier(.2,1.6,.4,1) forwards; }
+  @keyframes stamp2 { to { opacity: .92; transform: translateY(-50%) rotate(-6deg) scale(1); } }
+  @media (prefers-reduced-motion: reduce) { .result .stamp.show { animation: none; opacity: .92; transform: translateY(-50%) rotate(-6deg); } }
+  .result .file, .result .meta { padding-right: 330px; }
 </style>
 </head>
 <body>
@@ -440,7 +460,7 @@ const LABELS = {
 };
 const STAMP = { odwolanie: "ODWOŁANIE", pelnomocnictwo: "PEŁNOMOCNICTWO", przelew: "PRZELEW" };
 const CONF_TEXT = { high: "Reguła", medium: "Model, wartość jest w tekście", low: "Model, nie znaleziono w tekście: sprawdź" };
-let current = null, fname = "wynik", prov = {}, typeNames = {};
+let current = null, fname = "wynik", prov = {}, typeNames = {}, reviewed = {}, approved = false;
 
 function esc(v) { return String(v).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
@@ -493,17 +513,18 @@ function renderObj(obj, path) {
     const p = path ? `${path}.${k}` : k;
     if (v && typeof v === "object") { nested += renderGroup(k, v, p, true); continue; }
     const f = prov[p];
-    const conf = v === null ? "" : (f ? f.confidence : "");
+    const conf = reviewed[p] || v === null ? "" : (f ? f.confidence : "");
     const val = v === null ? `<span class="null">brak</span>` : esc(v);
     const where = f && f.page ? `<span class="where">str. ${f.page}</span>` : "";
-    const click = f && f.page ? ` class="clickable" tabindex="0" data-path="${esc(p)}"` : "";
-    html += `<dt>${LABELS[k] || esc(k)}</dt><dd data-conf="${conf}"${click} title="${conf ? CONF_TEXT[conf] : ""}"><span class="v">${val}</span>${where}</dd>`;
+    const click = f && f.page ? ` class="clickable" tabindex="0"` : "";
+    const acts = `<span class="acts"><button type="button" data-act="edit">Edytuj</button></span>`;
+    html += `<dt>${LABELS[k] || esc(k)}</dt><dd data-conf="${conf}" data-path="${esc(p)}"${click} title="${conf ? CONF_TEXT[conf] : ""}"><span class="v">${val}</span>${acts}${where}</dd>`;
   }
   return html + "</dl>" + nested;
 }
 
 function renderGroup(k, v, path, sub) {
-  const title = LABELS[k] || esc(k);
+  const title = k === "data" && v && typeof v === "object" && !Array.isArray(v) ? "Dane podmiotu" : LABELS[k] || esc(k);
   if (Array.isArray(v)) {
     if (!v.length) return `<section class="group"><h3>${title}</h3><p class="item-label">Brak pozycji</p></section>`;
     return `<section class="group"><h3>${title}</h3>` + v.map((it, i) =>
@@ -530,21 +551,10 @@ function render(res) {
   stamp.textContent = res.type ? STAMP[res.type] || (typeNames[res.type] || res.type).toUpperCase() : "SPOZA KLAS";
   stamp.classList.add("show"); if (!res.type) stamp.classList.add("unknown");
 
-  const fs = Object.values(prov), cnt = c => fs.filter(f => f.confidence === c).length;
-  const llm = t.llm ? `model ${(t.llm.tokens_in || 0) + (t.llm.tokens_out || 0)} tokenów` : "bez modelu";
-  $("#meta").innerHTML = `${t.pages} str.${t.scan_pages.length ? `, skan: ${t.scan_pages.join(", ")}` : ""}, ${llm}, ${t.seconds} s` +
-    (fs.length ? `<br><b>${fs.length}</b> wartości: ${cnt("high")} z reguł, ${cnt("medium")} z modelu potwierdzone w tekście` +
-      (cnt("low") ? `, <b style="color:var(--low)">${cnt("low")} do sprawdzenia</b>` : "") : "");
-
+  reviewed = {}; approved = false;
+  renderMeta();
   renderPages(res);
-  $("#tab-fields").innerHTML = !res.type
-    ? `<p class="empty">Dokument nie pasuje do żadnej z klas. Zapisany wynik to pusty obiekt <code>{}</code>.</p>`
-    : `<div class="legend"><span><i class="sw high"></i>${CONF_TEXT.high}</span><span><i class="sw medium"></i>${CONF_TEXT.medium}</span><span><i class="sw low"></i>${CONF_TEXT.low}</span></div>` +
-      renderTop(result);
-  document.querySelectorAll("dd.clickable").forEach(d => {
-    d.onclick = () => focusField(d.dataset.path);
-    d.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); focusField(d.dataset.path); } };
-  });
+  renderFields();
 
   $("#json").value = JSON.stringify(result, null, 2);
   $("#download").disabled = $("#copy").disabled = false;
@@ -557,6 +567,71 @@ function render(res) {
     `<h4>Użyte reguły</h4>${list(t.rules)}<h4>Odrzucone wartości</h4>${list(t.dropped)}` +
     `<h4>Ostrzeżenia</h4>${list(t.warnings.concat(t.validation))}<h4>OCR</h4>${list(t.ocr)}` +
     `<h4>Tekst przekazany do analizy</h4><pre class="text">${esc(res.text || "")}</pre>`;
+}
+
+function renderMeta() {
+  const t = current.trace, fs = Object.values(prov), cnt = c => fs.filter(f => f.confidence === c && !reviewed[f.path]).length;
+  const llm = t.llm ? `model ${(t.llm.tokens_in || 0) + (t.llm.tokens_out || 0)} tokenów` : "bez modelu";
+  $("#meta").innerHTML = `${t.pages} str.${t.scan_pages.length ? `, skan: ${t.scan_pages.join(", ")}` : ""}, ${llm}, ${t.seconds} s` +
+    (fs.length ? `<br><b>${fs.length}</b> wartości: ${cnt("high")} z reguł, ${cnt("medium")} z modelu potwierdzone w tekście` +
+      (cnt("low") ? `, <b style="color:var(--low)">${cnt("low")} do sprawdzenia</b>` : "") : "") +
+    (approved ? `<br><span class="approved">✓ Zatwierdzone przez urzędnika</span>` : "");
+}
+
+function renderFields() {
+  const res = current;
+  $("#tab-fields").innerHTML = !res.type
+    ? `<p class="empty">Dokument nie pasuje do żadnej z klas. Zapisany wynik to pusty obiekt <code>{}</code>.</p>`
+    : `<div class="review-bar"><div class="legend">${["high", "medium", "low"].map(c => `<span><i class="sw ${c}"></i>${CONF_TEXT[c]}</span>`).join("")}</div>` +
+      `<button type="button" class="btn ${approved ? "ghost" : ""}" id="approve">${approved ? "Cofnij zatwierdzenie" : "Zatwierdź dokument"}</button></div>` +
+      renderTop(res.result);
+  const ap = $("#approve");
+  if (ap) ap.onclick = () => { approved = !approved; afterReview(); };
+  document.querySelectorAll("#tab-fields dd[data-path]").forEach(d => {
+    if (d.classList.contains("clickable")) {
+      d.onclick = () => focusField(d.dataset.path);
+      d.onkeydown = e => { if (e.target === d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); focusField(d.dataset.path); } };
+    }
+    d.querySelectorAll("[data-act]").forEach(b => b.onclick = e => { e.stopPropagation(); startEdit(d); });
+  });
+}
+
+// sciezka typu "mocodawca[0].data.krs" -> lista kluczy
+const pathKeys = p => p.replace(/\[(\d+)\]/g, ".$1").split(".").map(k => /^\d+$/.test(k) ? +k : k);
+function getAt(obj, p) { return pathKeys(p).reduce((o, k) => o == null ? o : o[k], obj); }
+function setAt(obj, p, v) { const ks = pathKeys(p), last = ks.pop(); ks.reduce((o, k) => o[k], obj)[last] = v; }
+
+function startEdit(d) {
+  const p = d.dataset.path, old = getAt(current.result, p);
+  const inp = document.createElement("input");
+  inp.className = "edit"; inp.value = old === null || old === undefined ? "" : String(old);
+  inp.setAttribute("aria-label", "Nowa wartość"); inp.placeholder = "puste = brak";
+  d.querySelector(".v").replaceWith(inp); d.querySelector(".acts").remove();
+  d.onclick = null; inp.onclick = e => e.stopPropagation();
+  let done = false;
+  const finish = save => {
+    if (done) return; done = true;
+    if (save) {
+      const raw = inp.value.trim();
+      let nv = raw === "" ? null : raw;
+      if (nv !== null && typeof old === "number" && !isNaN(+nv.replace(",", "."))) nv = +nv.replace(",", ".");
+      if (nv !== null && typeof old === "boolean") nv = /^(true|tak|1)$/i.test(nv);
+      if (nv !== old) { setAt(current.result, p, nv); reviewed[p] = "edit"; approved = false; }
+    }
+    afterReview();
+  };
+  inp.onkeydown = e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+  inp.onblur = () => finish(true);
+  inp.focus(); inp.select();
+}
+
+function afterReview() {
+  const y = $("#tab-fields").scrollTop;
+  renderMeta(); renderFields();
+  $("#tab-fields").scrollTop = y;
+  $("#json").value = JSON.stringify(current.result, null, 2);
+  $("#jsonmsg").className = "msg ok"; $("#jsonmsg").textContent = approved ? "Zatwierdzone przez urzędnika" : Object.keys(reviewed).length ? "Uwzględniono zmiany" : "";
+  $("#download").disabled = false;
 }
 
 async function upload(file) {
@@ -588,10 +663,11 @@ document.addEventListener("drop", e => upload(e.dataTransfer.files[0]));
 document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
   document.querySelectorAll(".tab").forEach(x => x.setAttribute("aria-selected", x === b));
   ["fields", "json", "trace"].forEach(n => $("#tab-" + n).classList.toggle("hidden", n !== b.dataset.tab));
+  if (b.dataset.tab === "fields" && current && current.type) renderFields();
 });
 
 $("#json").oninput = () => {
-  try { JSON.parse($("#json").value); $("#jsonmsg").className = "msg ok"; $("#jsonmsg").textContent = "Poprawny JSON"; $("#download").disabled = false; }
+  try { const pj = JSON.parse($("#json").value); if (current && current.type && pj && typeof pj === "object") current.result = pj; $("#jsonmsg").className = "msg ok"; $("#jsonmsg").textContent = "Poprawny JSON"; $("#download").disabled = false; }
   catch (e) { $("#jsonmsg").className = "msg err"; $("#jsonmsg").textContent = "Błąd składni: " + e.message; $("#download").disabled = true; }
 };
 $("#download").onclick = () => {
