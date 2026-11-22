@@ -142,6 +142,7 @@ def main():
     from core.pipeline import Extractor
 
     ex = Extractor()
+    print(f"Model: {ex.llm.model} (skany: {ex.llm.vision_model})", flush=True)
     items = build_index(Path(args.data), args.split)
     if args.only:
         items = [i for i in items if i[2] == args.only]

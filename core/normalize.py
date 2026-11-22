@@ -135,8 +135,18 @@ def regon(v):
     return d if len(d) in (9, 14) else None
 
 
+FOREIGN_IBAN = re.compile(r"(?<![A-Z])(?!PL)([A-Z]{2}\d{2}[A-Z0-9]{11,30})")
+
+
 def iban(v):
-    d = digits(v) if v is not None else ""
+    """Polski rachunek: 26 cyfr (prefiks PL dokleja pipeline, jesli jest w dokumencie).
+    Zagraniczny IBAN (inny kod kraju): bez spacji, w formie z dokumentu (decyzja UZP)."""
+    if v is None:
+        return None
+    m = FOREIGN_IBAN.search(re.sub(r"[\s\-]", "", str(v)).upper())
+    if m:
+        return m.group(1)
+    d = digits(v)
     return d[-26:] if len(d) >= 26 else None
 
 
@@ -193,6 +203,8 @@ def grounded(kind: str, value, runs, source_lower: str) -> bool:
         return True
     if kind == "email":
         return value.lower() in source_lower
+    if kind == "iban" and FOREIGN_IBAN.fullmatch(str(value)):
+        return str(value).lower() in re.sub(r"[\s\-]", "", source_lower)
     d = digits(value)
     if kind == "iban" and len(d) >= 26:
         return d in "".join(r for r, _ in runs) or d in re.sub(r"\D", "", source_lower)  # numer zlamany na 2 linie

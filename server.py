@@ -20,6 +20,19 @@ from core.llm import USAGE  # noqa: E402
 from core.pipeline import Extractor  # noqa: E402
 
 app = FastAPI(title="Odwolania2JSON")
+PUBLIC = "--public" in sys.argv  # GUI dostepne z internetu (VM): kreator bez zapisu na dysk
+_WRITE = ("/api/types/save", "/enabled", "/restore")
+
+
+@app.middleware("http")
+async def read_only_guard(request, call_next):
+    p = request.url.path
+    if PUBLIC and ((request.method == "POST" and p.endswith(_WRITE)) or
+                   (request.method == "DELETE" and p.startswith("/api/types/"))):
+        return JSONResponse({"error": "Wersja demonstracyjna na serwerze: zapisywanie i usuwanie typów "
+                             "jest wyłączone. Uruchom aplikację lokalnie, aby zapisać zmiany."}, status_code=403)
+    return await call_next(request)
+
 ex = Extractor()
 UPLOADS = ROOT / ".cache" / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
@@ -42,11 +55,20 @@ async def extract(file: UploadFile = File(...)):
     data = await file.read()
     doc_id = hashlib.sha256(data).hexdigest()[:16]
     path = UPLOADS / f"{doc_id}.pdf"
+    try:
+        _d = pymupdf.open(stream=data, filetype="pdf")
+        bad = _d.needs_pass or _d.page_count == 0
+        _d.close()
+        if bad:
+            raise ValueError
+    except Exception:
+        return JSONResponse({"error": f"Nie da się otworzyć pliku „{file.filename}” jako PDF. "
+                             "Plik jest uszkodzony, pusty albo zabezpieczony hasłem."}, status_code=400)
     path.write_bytes(data)
     try:
         res = ex.process(path, with_provenance=True)
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=500)
+        return JSONResponse({"error": f"Błąd podczas przetwarzania: {type(e).__name__}: {e}"}, status_code=500)
     res["usage"] = USAGE.as_dict()
     res["filename"] = file.filename
     res["doc_id"] = doc_id
@@ -115,11 +137,12 @@ def type_retest(d: dict = Body(...)):
 @app.post("/api/types/save")
 def type_save(d: dict = Body(...)):
     try:
+        archived = creator.archive_copy(d["name"]) if d.get("editing") else None
         files = creator.save(d)
     except (ValueError, KeyError) as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     _reload()
-    return {"saved": files, "types": creator.list_types(ex.config)}
+    return {"saved": files, "archived_previous": archived, "types": creator.list_types(ex.config)}
 
 
 @app.post("/api/types/{name}/enabled")
@@ -130,6 +153,39 @@ def type_enable(name: str, enabled: bool = Body(..., embed=True)):
         return JSONResponse({"error": str(e)}, status_code=400)
     _reload()
     return creator.list_types(ex.config)
+
+
+@app.get("/api/types/{name}/config")
+def type_config(name: str):
+    try:
+        return creator.load_for_edit(name, ex.config)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+@app.post("/api/types/field")
+def type_field(payload: dict = Body(...)):
+    """Dodanie / usuniecie pola w szkicu typu (nic nie zapisuje, do zapisu sluzy /api/types/save)."""
+    d = payload.get("draft") or {}
+    try:
+        if payload.get("op") == "add":
+            creator.add_field(d, payload.get("path", ""), payload.get("kind", "text"))
+        else:
+            creator.remove_field(d, payload.get("path", ""))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return d
+
+
+@app.post("/api/types/samples")
+async def type_samples(files: list[UploadFile] = File(...)):
+    names = []
+    for f in files[:5]:
+        data = await f.read()
+        name = f"draft_{hashlib.sha256(data).hexdigest()[:12]}_{Path(f.filename or 'x.pdf').name}"
+        (UPLOADS / name).write_bytes(data)
+        names.append(name)
+    return {"sample_files": names}
 
 
 @app.delete("/api/types/{name}")
@@ -159,6 +215,6 @@ def type_restore(archive_id: str):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8000
-    if "--no-browser" not in sys.argv:
+    if "--no-browser" not in sys.argv and not PUBLIC:
         webbrowser.open(f"http://localhost:{port}")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0" if PUBLIC else "127.0.0.1", port=port, log_level="warning")

@@ -219,10 +219,17 @@
     </div>
 
     <div class="card hidden" id="draftCard">
-      <h3>Propozycja konfiguracji</h3>
+      <h3 id="dTitle">Propozycja konfiguracji</h3>
       <p class="lead" style="margin-bottom:12px">Sprawdź i popraw, jeśli trzeba. Każda zmiana działa od razu po kliknięciu "Przetestuj ponownie".</p>
       <div class="grid2">
-        <div><h3 style="font-size:14px">Pola i ich typy</h3><table class="fields-table" id="dFields"></table></div>
+        <div><h3 style="font-size:14px">Pola i ich typy</h3><table class="fields-table" id="dFields"></table>
+          <div class="row" style="margin-top:10px">
+            <input type="text" id="nfPath" placeholder="nowe pole, np. termin_platnosci" aria-label="Ścieżka nowego pola" style="flex:1;min-width:180px;font:14px Archivo,sans-serif;border:1px solid var(--line);border-radius:4px;padding:7px 9px">
+            <select id="nfKind" aria-label="Typ nowego pola" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:4px"></select>
+            <button class="btn ghost" id="nfAdd">Dodaj pole</button>
+          </div>
+          <p class="msg" style="margin:4px 0 0">Zagnieżdżenie kropką (<code>nabywca.adres</code>), pole w liście z <code>[]</code> (<code>pozycje[].stawka_vat</code>).</p>
+        </div>
         <div>
           <label class="f">Słowa rozpoznające typ <span class="hint">jedno na linię: słowo = punkty; nagłówek dokumentu zaczyna się od "#"</span><textarea id="dKeywords" style="min-height:150px"></textarea></label>
           <h3 style="font-size:14px;margin-top:12px">Reguły nauczone z przykładu</h3><div id="dRules" class="msg"></div>
@@ -230,6 +237,7 @@
         <label class="f" style="grid-column:1/-1">Polecenie dla modelu<textarea id="dPrompt"></textarea></label>
       </div>
       <h3 style="font-size:14px;margin-top:16px">Test na przykładowych PDF-ach</h3>
+      <div class="row" style="margin-top:0"><input type="file" id="dFiles" accept="application/pdf" multiple aria-label="PDF-y do testu"><button class="btn ghost" id="dUpload">Wgraj PDF-y do testu</button></div>
       <div id="dTests"></div>
       <div class="row"><button class="btn ghost" id="dRetest">Przetestuj ponownie</button><button class="btn" id="dSave">Zapisz i włącz typ</button><span class="msg" id="dMsg"></span></div>
     </div>
@@ -423,10 +431,15 @@ async function loadTypes(keepMsg) {
     `<tr><td>${esc(t.description)}</td><td><code>${esc(t.name)}</code></td>` +
     `<td>${t.builtin ? '<span class="badge">wbudowany</span>' : '<span class="badge new">dodany konfiguracją</span>'}</td>` +
     `<td>${t.builtin ? "tak" : `<input type="checkbox" data-type="${esc(t.name)}" ${t.enabled ? "checked" : ""} aria-label="Włącz typ ${esc(t.name)}">`}</td>` +
-    `<td>${t.builtin ? "" : `<button class="btn ghost" data-del="${esc(t.name)}">Usuń do archiwum</button>`}</td></tr>`).join("") +
+    `<td style="white-space:nowrap">${t.builtin ? "" : (t.enabled ? `<button class="btn ghost" data-edit="${esc(t.name)}">Edytuj</button> ` : "") + `<button class="btn ghost" data-del="${esc(t.name)}">Usuń do archiwum</button>`}</td></tr>`).join("") +
     (arch.length ? `<tr><th colspan="5" style="padding-top:18px">Archiwum (usunięte typy, można przywrócić)</th></tr>` + arch.map(a =>
       `<tr><td>${esc(a.description)}</td><td><code>${esc(a.name)}</code></td><td colspan="2" class="msg">${esc(a.id)}</td>` +
       `<td><button class="btn ghost" data-restore="${esc(a.id)}">Przywróć</button></td></tr>`).join("") : "");
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = async () => {
+    const r = await fetch(`/api/types/${b.dataset.edit}/config`); const d = await r.json();
+    if (!r.ok) { $("#typesMsg").className = "msg err"; $("#typesMsg").textContent = d.error; return; }
+    d.test = []; renderDraft(d); $("#draftCard").scrollIntoView({ behavior: "smooth" });
+  });
   document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     const r = await fetch(`/api/types/${b.dataset.del}`, { method: "DELETE" }); const d = await r.json();
     $("#typesMsg").className = r.ok ? "msg ok" : "msg err";
@@ -459,10 +472,14 @@ function textToKw(txt) {
 
 function renderDraft(d) {
   draftObj = d;
+  $("#dTitle").textContent = d.editing ? `Edycja typu: ${d.description} (${d.name})` : "Propozycja konfiguracji";
   $("#dFields").innerHTML = Object.entries(d.fields).map(([p, k]) =>
-    `<tr><td><code>${esc(p)}</code></td><td><select data-path="${esc(p)}">${KINDS.map(x => `<option value="${x}" ${x === k ? "selected" : ""}>${KIND_PL[x]}</option>`).join("")}</select></td></tr>`).join("");
+    `<tr><td><code>${esc(p)}</code></td><td><select data-path="${esc(p)}">${KINDS.map(x => `<option value="${x}" ${x === k ? "selected" : ""}>${KIND_PL[x]}</option>`).join("")}</select></td>` +
+    `<td><button class="btn ghost" style="padding:3px 10px" data-rmfield="${esc(p)}" aria-label="Usuń pole ${esc(p)}">Usuń</button></td></tr>`).join("");
+  $("#nfKind").innerHTML = KINDS.map(x => `<option value="${x}">${KIND_PL[x]}</option>`).join("");
+  document.querySelectorAll("[data-rmfield]").forEach(b => b.onclick = () => fieldOp("remove", b.dataset.rmfield));
   $("#dKeywords").value = kwToText(d.classify);
-  const learned = (d.rules[0] || {}).fields || {};
+  const learned = Object.assign({}, ...(d.rules || []).filter(r => r.extractor === "labels").map(r => r.fields || {}));
   $("#dRules").innerHTML = Object.keys(learned).length
     ? "<ul>" + Object.entries(learned).map(([p, r]) => `<li><code>${esc(p)}</code> stoi po etykiecie „${esc(r.labels[0])}”</li>`).join("") + "</ul>"
     : "Nie znaleziono etykiet: wszystkie pola wyciągnie model.";
@@ -473,7 +490,7 @@ function renderDraft(d) {
       ` <span class="msg">(punkty: ${Object.entries(t.scores).map(([k, v]) => `${esc(k)} ${v}`).join(", ")})</span>` +
       (t.warnings && t.warnings.length ? `<div class="msg">${esc(t.warnings.join("; "))}</div>` : "") +
       `<pre>${esc(JSON.stringify(t.result, null, 2))}</pre></div>`;
-  }).join("") || '<p class="msg">Brak przykładowych PDF-ów do testu.</p>';
+  }).join("") || '<p class="msg">Brak wyników testu: wgraj PDF-y powyżej i kliknij "Przetestuj ponownie".</p>';
   $("#draftCard").classList.remove("hidden");
 }
 
@@ -486,6 +503,24 @@ function collectDraft() {
   delete d.test;
   return d;
 }
+
+async function fieldOp(op, path, kind) {
+  $("#dMsg").className = "msg"; $("#dMsg").textContent = "";
+  const r = await fetch("/api/types/field", { method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ op, path, kind, draft: collectDraft() }) });
+  const d = await r.json();
+  if (!r.ok) { $("#dMsg").className = "msg err"; $("#dMsg").textContent = d.error; return; }
+  d.test = draftObj.test; renderDraft(d);
+  $("#dMsg").className = "msg ok"; $("#dMsg").textContent = op === "add" ? `Dodano pole ${path}. Przetestuj i zapisz.` : `Usunięto pole ${path}. Przetestuj i zapisz.`;
+}
+$("#nfAdd").onclick = () => { fieldOp("add", $("#nfPath").value, $("#nfKind").value); $("#nfPath").value = ""; };
+$("#dUpload").onclick = async () => {
+  if (!$("#dFiles").files.length) return;
+  const fd = new FormData(); [...$("#dFiles").files].forEach(f => fd.append("files", f));
+  const r = await fetch("/api/types/samples", { method: "POST", body: fd }); const d = await r.json();
+  draftObj.sample_files = (draftObj.sample_files || []).concat(d.sample_files);
+  $("#dRetest").click();
+};
 
 $("#openCreator").onclick = () => { $("#creator").classList.remove("hidden"); loadTypes(); };
 $("#closeCreator").onclick = () => { $("#creator").classList.add("hidden"); info(); };
@@ -513,7 +548,9 @@ $("#dSave").onclick = async () => {
     const r = await fetch("/api/types/save", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(collectDraft()) });
     const d = await r.json(); if (!r.ok) throw new Error(d.error || r.statusText);
     $("#dMsg").className = "msg ok";
-    $("#dMsg").innerHTML = `Zapisano i włączono. Typ działa od teraz w GUI i w CLI. Pliki: <span class="files-out">${d.saved.map(esc).join(", ")}</span>`;
+    $("#dMsg").innerHTML = `Zapisano i włączono. Typ działa od teraz w GUI i w CLI. Pliki: <span class="files-out">${d.saved.map(esc).join(", ")}</span>` +
+      (d.archived_previous ? `<br>Poprzednia wersja zachowana w archiwum: <span class="files-out">configs/archiwum/${esc(d.archived_previous)}</span>` : "");
+    draftObj.editing = true;
     loadTypes();
   } catch (e) { $("#dMsg").className = "msg err"; $("#dMsg").textContent = e.message; }
 };

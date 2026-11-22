@@ -12,7 +12,7 @@ import yaml
 
 from . import pdf
 from .classify import compact
-from .config import ROOT, DocType, skeleton
+from .config import ROOT, DocType
 
 SLUG = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
 
@@ -334,3 +334,92 @@ def restore(archive_id):
     shutil.move(str(y), str(ROOT / "configs" / "extra" / y.name))
     src.rmdir() if not any(src.iterdir()) else None
     return list(types)
+
+
+# --- edycja istniejacego typu (dodawanie / usuwanie pol) ---
+def load_for_edit(name, config):
+    """Konfiguracja typu dodanego konfiguracja w formacie szkicu kreatora."""
+    _extra_file(name)                       # tylko typy z configs/extra
+    t = config.types.get(name)
+    if t is None:
+        raise ValueError("Typ jest wyłączony - włącz go, żeby edytować")
+    raw = t.raw
+    return {"name": name, "description": raw.get("description", name), "schema": copy.deepcopy(t.schema),
+            "fields": dict(t.fields), "classify": copy.deepcopy(raw.get("classify") or {}),
+            "prompt": t.prompt, "llm": raw.get("llm", "always"), "rules": copy.deepcopy(raw.get("rules") or []),
+            "editing": True, "sample_files": []}
+
+
+def _schema_node(schema, parts, create):
+    """Zwraca schemat obiektu-rodzica dla sciezki ['a','b[]','c'] (tworzy brakujace obiekty)."""
+    node = schema
+    for part in parts:
+        lst = part.endswith("[]")
+        key = part[:-2] if lst else part
+        props = node.setdefault("properties", {})
+        if key not in props:
+            if not create:
+                return None
+            props[key] = ({"type": "array", "items": {"type": "object", "additionalProperties": False,
+                                                      "required": [], "properties": {}}}
+                          if lst else {"type": "object", "additionalProperties": False, "required": [], "properties": {}})
+            node.setdefault("required", []).append(key)
+        node = props[key]["items"] if lst else props[key]
+    return node
+
+
+JSON_TYPE = {"int": ["integer", "null"], "amount": ["number", "null"]}
+
+
+def add_field(d, path, kind):
+    path = path.strip()
+    if not re.fullmatch(r"[a-z][a-z0-9_]*(\[\])?(\.[a-z][a-z0-9_]*(\[\])?)*", path) or path.endswith("[]"):
+        raise ValueError("Ścieżka pola: małe litery, cyfry i _, kropka dla zagnieżdżenia, np. termin_platnosci albo nabywca.adres")
+    if path in d["fields"]:
+        raise ValueError(f"Pole '{path}' już istnieje")
+    parts = path.split(".")
+    parent = _schema_node(d["schema"], parts[:-1], create=True)
+    leaf = parts[-1]
+    parent.setdefault("properties", {})[leaf] = {"type": JSON_TYPE.get(kind, ["string", "null"])}
+    req = parent.setdefault("required", [])
+    if leaf not in req:
+        req.append(leaf)
+    d["fields"][path] = kind
+    line = f"- {path}: {TYPE_HINTS.get(kind, 'tekst')}."
+    marker = "\n\nBrak informacji"
+    d["prompt"] = d["prompt"].replace(marker, "\n" + line + marker, 1) if marker in d["prompt"] else d["prompt"] + "\n" + line
+    return d
+
+
+def remove_field(d, path):
+    if path not in d["fields"]:
+        raise ValueError(f"Nie ma pola '{path}'")
+    parts = path.split(".")
+    parent = _schema_node(d["schema"], parts[:-1], create=False)
+    if parent is not None:
+        parent.get("properties", {}).pop(parts[-1], None)
+        if parts[-1] in parent.get("required", []):
+            parent["required"].remove(parts[-1])
+    d["fields"].pop(path)
+    d["prompt"] = "\n".join(l for l in d["prompt"].splitlines() if not l.startswith(f"- {path}:"))
+    for r in d.get("rules") or []:
+        (r.get("fields") or {}).pop(path, None)
+    d["rules"] = [r for r in d.get("rules") or [] if r.get("fields") or r.get("extractor") != "labels"]
+    return d
+
+
+def archive_copy(name):
+    """Kopia aktualnej wersji typu do archiwum przed nadpisaniem (wersjonowanie)."""
+    import datetime
+    import shutil
+    try:
+        cfg_file, t = _extra_file(name)
+    except ValueError:
+        return None
+    dest = ARCHIVE / f"{name}_{datetime.datetime.now():%Y%m%d_%H%M%S}_poprzednia_wersja"
+    dest.mkdir(parents=True)
+    for rel in (t.get("schema"), t.get("prompt")):
+        if rel and (ROOT / rel).exists():
+            shutil.copy2(str(ROOT / rel), str(dest / Path(rel).name))
+    shutil.copy2(str(cfg_file), str(dest / cfg_file.name))
+    return dest.name

@@ -21,7 +21,6 @@ settings:
     max_pages: 4                 # dane sa zwykle na pierwszych 3 stronach
     min_chars_per_page: 60       # mniej = strona traktowana jako skan
     ocr_dpi: 200
-    ocr_rotations: [0, 180, 90, 270]   # kolejne proby, gdy odczyt skanu jest nieczytelny
   classification:
     scan_chars: 4000             # ile znakow poczatku dokumentu analizowac
     min_score: 3                 # ponizej = dokument spoza klas -> {}

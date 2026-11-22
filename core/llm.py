@@ -14,6 +14,12 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+OCR_BASE = ("Przepisz dokładnie cały tekst z tego skanu dokumentu, linia po linii, zachowując polskie znaki, "
+            "liczby i układ. Zwróć tylko przepisany tekst, bez komentarzy.")
+OCR_PROMPT = OCR_BASE + (" Jeżeli tekst na obrazie jest odwrócony do góry nogami albo obrócony bokiem, "
+                         "niczego nie przepisuj i zwróć tylko słowo: OBROCONY")
+
+
 class LLMUnavailable(RuntimeError):
     pass
 
@@ -177,13 +183,15 @@ class LLM:
             data = repair_json(res["content"])
         return data, res
 
-    def transcribe_image(self, png_b64: str):
+    ROTATED = "OBROCONY"
+
+    def transcribe_image(self, png_b64: str, allow_flag: bool = True):
         """OCR przez model z wizja: zwraca czysty tekst strony."""
         url = f"data:image/jpeg;base64,{png_b64}"
         img = {"type": "image_url", "image_url": url} if self.s.get("image_url_format", "string") == "string" \
             else {"type": "image_url", "image_url": {"url": url}}
         messages = [{"role": "user", "content": [
-            {"type": "text", "text": "Przepisz dokładnie cały tekst z tego skanu dokumentu, linia po linii, zachowując polskie znaki, liczby i układ. Jeśli obraz jest odwrócony, przepisz tekst w poprawnej kolejności. Zwróć tylko przepisany tekst, bez komentarzy."},
+            {"type": "text", "text": OCR_PROMPT if allow_flag else OCR_BASE},
             img]}]
         res = self.chat(messages, model=self.vision_model, max_tokens=3000, tag="ocr")
         return res["content"] or ""

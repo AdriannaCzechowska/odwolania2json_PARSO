@@ -9,3 +9,4 @@ input/*
 !input/.gitkeep
 
 configs/archiwum/
+eval/_odpornosc_tmp/

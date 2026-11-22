@@ -13,6 +13,10 @@ _CITY_DATE = re.compile(
 _SEPARATOR = re.compile(r"^[\s\-=_*·.]{5,}$")
 
 
+# pieczatka kancelarii/zamawiajacego: "WPŁYNĘŁO dnia 19.02.2026 L.dz. 202", "Data wpływu", "Wpłynęło"
+_STAMP = re.compile(r"(?i)\bw\s*p\s*[lł]\s*y\s*n\s*[eę]\s*[lł]\s*o|\bl\.?\s*dz\b|data\s+wp[lł]ywu|\bwp[lł]yw\b")
+
+
 def header_city_date(doc, rule, trace):
     """Linia 'Miejscowosc, dnia DD miesiaca RRRR' z pierwszej strony."""
     text = doc.pages[0].text if doc.pages else ""
@@ -24,6 +28,9 @@ def header_city_date(doc, rule, trace):
         city = m.group(1).strip()
         if city.lower() in ("dnia", "data", "warszawa dnia"):
             continue
+        line_end = text.find("\n", m.end())
+        if _STAMP.search(text[line_start:line_end if line_end >= 0 else len(text)]):
+            continue  # pieczatka wplywu ("WPLYNELO dnia ...", "L.dz."), a nie data pisma
         out[rule["fields"]["city"]] = city
         out[rule["fields"]["date"]] = parse_date(m.group(2))
         trace.append({"rule": "header_city_date", "match": m.group(0).strip(), "page": 1})

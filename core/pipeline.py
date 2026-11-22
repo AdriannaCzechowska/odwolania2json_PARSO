@@ -6,7 +6,7 @@ from pathlib import Path
 
 import jsonschema
 
-from . import cache, paths, pdf
+from . import paths, pdf
 from .classify import classify
 from .config import load_config
 from .extractors import run_rules
@@ -34,6 +34,11 @@ def conform(value, schema):
 def _iban_as_in_document(digits26, compact_src):
     """Rachunek w formie z dokumentu: 'PL' + 26 cyfr, jesli w dokumencie stoi z prefiksem PL (decyzja UZP)."""
     return "PL" + digits26 if ("PL" + digits26) in compact_src else digits26
+
+
+def _is_rotated_flag(text):
+    t = (text or "").strip().strip(".").upper()
+    return t.startswith("OBROCONY") and len(t) < 40
 
 
 def _restore_iban(value, runs):
@@ -72,23 +77,52 @@ class Extractor:
 
     # ---------- OCR ----------
     def _ocr(self, doc, trace):
+        """OCR skanow modelem z wizja. Orientacje strony wykrywamy z obrazu (core/orient.py), bo model
+        czytajacy odwrocona strone potrafi zmyslic plynny tekst zamiast zwrocic belkot."""
+        import numpy as np
+        import pymupdf
+        from .orient import detect_rotation
         ps = self.config.settings.get("pdf", {})
+        dpi, min_chars = ps.get("ocr_dpi", 200), ps.get("min_chars_per_page", 60)
+        pdoc = pymupdf.open(doc.path)
+        prior = None
         for page in doc.pages:
             if not page.is_scan:
                 continue
             if not self.llm.available:
                 trace["warnings"].append(f"strona {page.number}: skan, brak LLM do OCR")
                 continue
-            best = ""
-            for rotate in ps.get("ocr_rotations", [0, 180, 90, 270]):
-                img = pdf.render_png_b64(doc.path, page.number, ps.get("ocr_dpi", 150), rotate)
-                text = self.llm.transcribe_image(img)
-                if pdf.text_quality_ok(text, ps.get("min_chars_per_page", 60)):
-                    best = text
-                    trace["ocr"].append({"page": page.number, "rotate": rotate, "chars": len(text)})
+            pix = pdoc[page.number - 1].get_pixmap(dpi=100, colorspace=pymupdf.csGRAY)
+            gray = np.frombuffer(pix.samples, np.uint8).reshape(pix.height, pix.width)
+            angle, sure, cands = detect_rotation(gray)
+            if not sure and prior in cands:
+                # strony jednego skanu sa zwykle obrocone tak samo: najpierw orientacja poprzedniej strony
+                cands = (prior,) + tuple(a for a in cands if a != prior)
+
+            def read(a, n=page.number, allow_flag=True):
+                img = pdf.render_png_b64(doc.path, n, dpi, (360 - a) % 360)
+                return self.llm.transcribe_image(img, allow_flag)
+
+            # kolejnosc prob: kandydaci z detektora, potem pozostale obroty. Model sam zglasza obrocony tekst
+            # slowem OBROCONY (zamiast zmyslac plynny tekst), wtedy czytamy w nastepnej orientacji.
+            order = list(cands) + [a for a in (0, 180, 90, 270) if a not in cands]
+            text, used, flagged = "", angle, []
+            for a in order:
+                t = read(a)
+                if _is_rotated_flag(t):
+                    flagged.append(a)
+                    continue
+                if pdf.text_quality_ok(t, min_chars) or not text:
+                    text, used = t, a
+                if pdf.text_quality_ok(t, min_chars):
                     break
-                best = best or text
-            page.text, page.source = best, "ocr"
+            if not text:            # model zglosil obrot w kazdej orientacji: odczyt bez tej opcji
+                used = cands[0]
+                text = read(used, allow_flag=False)
+            prior = used
+            trace["ocr"].append({"page": page.number, "rotate": used, "detected": angle, "model_flagged": flagged, "chars": len(text)})
+            page.text, page.source = text, "ocr"
+        pdoc.close()
 
     # ---------- glowna funkcja ----------
     def process(self, path: str | Path, with_provenance: bool = False) -> dict:
@@ -203,7 +237,7 @@ class Extractor:
                 new = norm(value) if value is not None else None
                 if kind == "place" and new is not None:
                     new = fix_place(new, doc.plain)
-                if kind == "iban" and new is not None and dt.raw.get("options", {}).get("iban_prefix", True):
+                if kind == "iban" and new is not None and new.isdigit() and dt.raw.get("options", {}).get("iban_prefix", True):
                     new = _iban_as_in_document(new, compact_src)
                 if kind in GROUNDED and new is not None and not grounded(kind, new, runs, src_lower):
                     trace["dropped"].append({"field": field, "value": new, "reason": "brak w tekscie"})

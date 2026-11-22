@@ -2,6 +2,22 @@
 
 Aplikacja rozpoznaje typ dokumentu PDF (odwołanie do KIO, pełnomocnictwo, potwierdzenie przelewu) i zapisuje wyodrębnione dane jako JSON zgodny ze schematami UZP. Obsługuje PDF-y tekstowe i skany. Dokument spoza tych klas daje wynik `{}`.
 
+## Uruchomienie (Linux / Ubuntu)
+
+Wymagany Python 3.13+ i dostęp do internetu.
+
+```bash
+git clone https://github.com/AdriannaCzechowska/odwolania2json_PARSO.git
+cd odwolania2json_PARSO
+cp .env.example .env          # wpisz klucz API (albo: export MISTRAL_API_KEY=...)
+bash run.sh                   # input/ -> output/, przy pierwszym uruchomieniu instaluje biblioteki
+bash run.sh --input plik.pdf --output wynik.json
+bash run.sh --input /sciezka/dane --output /sciezka/wyniki
+bash run_gui.sh               # GUI na http://localhost:8000
+```
+
+Na serwerze oceny (`/opt/solution`) instalację robi `bash setup_vm.sh` (z `--gui` dodatkowo uruchamia GUI na porcie 8000 jako usługę), a komenda oceny jest w `RUN.md`. Kod działa też na Pythonie 3.12. Program nie wymaga GPU ani Tesseracta (OCR wykonuje model przez API).
+
 ## Uruchomienie (Windows)
 
 Wymagany Python 3.13+ i dostęp do internetu.
@@ -18,7 +34,7 @@ Interfejs graficzny: **`start_gui.bat`** otwiera http://localhost:8000. Wczytuje
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate            # Linux/macOS: source .venv/bin/activate
+.venv\Scripts\activate            # Linux: source .venv/bin/activate
 pip install -r requirements.txt
 python main.py                    # input/ -> output/
 python main.py --input plik.pdf --output wynik.json
@@ -77,6 +93,56 @@ python eval/evaluate.py --data ../hacknation-2026/dane --split all --offline   #
 ```
 
 Raportuje precision, recall i F1 per typ i per pole, z przykładami błędów. To przybliżenie zasad organizatora (listy dopasowywane po treści, nazwy i tytuły z progiem 80%), a nie oficjalny evaluator.
+
+Wynik na wszystkich danych treningowych UZP (`--split all`: 60 spraw, 30 skanów, 12 dokumentów spoza klas; 226 plików), model `ministral-8b-2512`:
+
+| Typ | F1 |
+|---|---|
+| odwołanie | 0.973 |
+| pełnomocnictwo | 0.998 |
+| potwierdzenie przelewu | 0.998 |
+| dokumenty spoza klas (`{}`) | 1.000 |
+| **łącznie** | **0.983** |
+
+Klasyfikacja: 226/226. Większość różnic w odwołaniach to konsorcja: zgodnie z odpowiedzią organizatora zwracamy wszystkich członków konsorcjum (lider pierwszy), a wzorce w repozytorium zawierają tylko lidera.
+
+## Test odporności na gorsze skany
+
+```bash
+python eval/robustness.py --data ../hacknation-2026/dane --cases 5
+```
+
+Skrypt zamienia dokumenty z danych treningowych w symulowane skany (obrazy bez warstwy tekstowej) w kilku wariantach: czysty skan, do góry nogami, obrót o 90°, przekrzywienie o 3°, szum z rozmyciem i kompresją, niska rozdzielczość. Dla każdego wariantu liczy klasyfikację, F1 i czas na dokument, a tabelę zapisuje w `eval/robustness_wyniki.md`.
+
+Wyniki (5 spraw walidacyjnych 46-50, 15 dokumentów na wariant, model `ministral-8b-2512`, pomiar sprzed ostatecznej wersji wykrywania orientacji opisanej niżej):
+
+| Wariant | Klasyfikacja | F1 |
+|---|---|---|
+| oryginalny PDF tekstowy | 15/15 | 0.982 |
+| skan czysty | 15/15 | 0.961 |
+| skan do góry nogami | 15/15 | 0.941 |
+| skan obrócony o 90° | 15/15 | 0.948 |
+| skan przekrzywiony o 3° | 15/15 | 0.935 |
+| skan z szumem i rozmyciem | 15/15 | 0.963 |
+| skan w niskiej rozdzielczości | 15/15 | 0.941 |
+
+Test wykrył, że przy odwróconej stronie model nie zwraca bełkotu, tylko płynny, zmyślony tekst (F1 0.537). Rozwiązanie (`core/orient.py`, `core/pipeline.py`):
+
+1. Z obrazu prostujemy stronę i ustalamy, czy linie tekstu biegną poziomo czy pionowo.
+2. Model czytający skan dostaje polecenie: jeśli tekst jest odwrócony albo obrócony bokiem, ma niczego nie przepisywać i odpowiedzieć słowem `OBROCONY`. Wtedy program obraca obraz i czyta ponownie.
+3. Strony jednego skanu są zwykle obrócone tak samo, więc przy niepewnej stronie najpierw próbujemy orientacji poprzedniej strony.
+4. Próbowaliśmy też wybierać między dwoma odczytami po liczbie konkretów (daty, numery) i po liczbie powtórzeń. Oba kryteria zawiodły na prawdziwych skanach, bo zmyślony tekst też zawiera daty i numery, a dobry odczyt czasem się powtarza.
+
+Sprawdzenie na prawdziwych skanach UZP (`dane/skany`, 30 dokumentów) i na tych samych skanach odwróconych o 180° (`python eval/rotate_scans.py --data <dane> --angle 180`):
+
+| Skany UZP | F1 |
+|---|---|
+| proste | 0.953 |
+| odwrócone o 180° | 0.952 |
+
+Pieczątka wpływu ("WPŁYNĘŁO dnia ... L.dz.") nie jest brana za miejscowość i datę pisma.
+
+Model 3B (`ministral-3b-2512`) dał na całym zbiorze F1 0.976 wobec 0.983 dla 8B, a na pełnomocnictwach 0.952 wobec 0.998, więc zostaliśmy przy 8B.
 
 ## Struktura
 

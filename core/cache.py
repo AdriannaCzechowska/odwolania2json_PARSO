@@ -3,7 +3,6 @@ import hashlib
 import json
 import sqlite3
 import threading
-from pathlib import Path
 
 from .config import ROOT
 
