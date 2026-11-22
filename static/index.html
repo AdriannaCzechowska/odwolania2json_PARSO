@@ -114,6 +114,22 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
 
+  /* sprawa: kilka dokumentow i ich zgodnosc */
+  .case-docs td:first-child { font-family: "JetBrains Mono", monospace; font-size: 12.5px; word-break: break-all; }
+  .case-docs .key { color: var(--ink-soft); font-size: 13px; }
+  .case-docs .btn, .tag { white-space: nowrap; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 2px 8px; border: 1.5px solid currentColor; border-radius: 3px; color: var(--stamp); }
+  .tag.none { color: var(--ink-soft); }
+  .checks { list-style: none; margin: 0; padding: 0; }
+  .checks li { display: grid; grid-template-columns: 34px 1fr; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .checks li:last-child { border-bottom: 0; }
+  .checks .mark { grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-content: center; font-weight: 800; color: #fff; }
+  .checks .ok .mark { background: var(--high); } .checks .blad .mark { background: var(--low); } .checks .brak .mark { background: var(--line); color: var(--ink-soft); }
+  .checks .name { font-weight: 600; }
+  .checks .vals { font-size: 13px; color: var(--ink-soft); }
+  .checks .vals b { color: var(--ink); font-weight: 500; }
+  .summary { font-stretch: 112%; font-size: 17px; font-weight: 700; margin: 0 0 6px; }
+
   /* kreator typow dokumentow */
   .creator { position: fixed; inset: 61px 0 0 0; background: var(--paper); overflow: auto; z-index: 5; }
   .creator-inner { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
@@ -151,6 +167,7 @@
 <header>
   <div class="brand">Odwołania2JSON<span>odwołania KIO, pełnomocnictwa i przelewy do JSON</span></div>
   <div class="status" id="status">Łączenie z serwerem…</div>
+  <button class="btn ghost" id="openCase">Sprawa</button>
   <button class="btn ghost" id="openCreator">Typy dokumentów</button>
   <button class="btn" id="pick">Wczytaj PDF</button>
   <input type="file" id="file" accept="application/pdf" hidden>
@@ -189,6 +206,22 @@
   </div>
 </main>
 
+
+<section class="creator hidden" id="case" aria-labelledby="caseTitle">
+  <div class="creator-inner">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;margin-top:0">
+      <div><h2 id="caseTitle">Sprawa</h2>
+        <p class="lead">Wczytaj naraz dokumenty jednej sprawy: odwołanie, pełnomocnictwo i potwierdzenie przelewu. Każdy dostanie swój JSON, a poniżej zobaczysz, czy dane w dokumentach są ze sobą zgodne. Sprawdzenia są opisane w pliku <code>configs/case_checks.yaml</code> i można dopisać nowe bez programowania.</p></div>
+      <button class="btn ghost" id="closeCase">Wróć do ekstrakcji</button>
+    </div>
+    <div class="card">
+      <div class="row" style="margin-top:0"><input type="file" id="caseFiles" accept="application/pdf" multiple aria-label="Dokumenty sprawy (PDF)">
+        <button class="btn" id="caseRun">Sprawdź sprawę</button><span class="msg" id="caseMsg"></span></div>
+    </div>
+    <div class="card hidden" id="caseChecksCard"><p class="summary" id="caseSummary"></p><ul class="checks" id="caseChecks"></ul></div>
+    <div class="card hidden" id="caseDocsCard"><h3>Dokumenty</h3><table class="types-table case-docs" id="caseDocs"></table></div>
+  </div>
+</section>
 
 <section class="creator hidden" id="creator" aria-labelledby="creatorTitle">
   <div class="creator-inner">
@@ -520,6 +553,58 @@ $("#dUpload").onclick = async () => {
   const r = await fetch("/api/types/samples", { method: "POST", body: fd }); const d = await r.json();
   draftObj.sample_files = (draftObj.sample_files || []).concat(d.sample_files);
   $("#dRetest").click();
+};
+
+/* ---------- sprawa: kilka dokumentow i ich zgodnosc ---------- */
+const KEYS = {
+  odwolanie: r => [r.Odwolujacy?.[0]?.nazwa, r.ZamowieniePubliczne?.numer_postepowania],
+  pelnomocnictwo: r => [r.mocodawca?.[0]?.data?.nazwa || r.mocodawca?.[0]?.data?.imie_nazwisko, (r.pelnomocnicy || []).map(p => p.imie_nazwisko).join(", ")],
+  przelew: r => [r.przelew_bankowy?.kwota != null ? r.przelew_bankowy.kwota + " zł" : null, r.przelew_bankowy?.tytul],
+};
+let caseDocs = [];
+function keyInfo(d) {
+  const f = KEYS[d.type];
+  const vals = f ? f(d.result || {}) : Object.values(d.result || {}).filter(v => typeof v !== "object").slice(0, 2);
+  return vals.filter(Boolean).map(esc).join(" · ");
+}
+function renderCase(res) {
+  caseDocs = res.documents;
+  $("#caseDocs").innerHTML = "<tr><th>Plik</th><th>Rozpoznany typ</th><th>Najważniejsze dane</th><th></th></tr>" +
+    res.documents.map((d, i) => `<tr><td>${esc(d.filename)}</td>
+      <td>${d.error ? `<span class="msg err">${esc(d.error)}</span>` : d.type ? `<span class="tag">${esc(STAMP[d.type] || typeNames[d.type] || d.type)}</span>` : `<span class="tag none">NIEROZPOZNANY</span>`}</td>
+      <td class="key">${d.error ? "" : keyInfo(d) || (d.type ? "" : "Dokument spoza obsługiwanych typów, JSON: {}")}</td>
+      <td>${d.error ? "" : `<button class="btn ghost" data-dl="${i}">Pobierz JSON</button>`}</td></tr>`).join("");
+  $("#caseDocs").querySelectorAll("[data-dl]").forEach(b => b.onclick = () => {
+    const d = caseDocs[+b.dataset.dl];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(d.result, null, 2)], { type: "application/json" }));
+    a.download = d.filename.replace(/\.pdf$/i, "") + ".json"; a.click();
+  });
+  const ch = res.checks || [], ok = ch.filter(c => c.status === "ok").length, bad = ch.filter(c => c.status === "blad").length;
+  $("#caseSummary").textContent = bad ? `Niezgodności: ${bad} z ${ch.length}. Sprawdź oznaczone pozycje.`
+    : ok === ch.length ? `Dokumenty są zgodne (${ok} z ${ch.length} sprawdzeń).`
+    : `Zgodne: ${ok} z ${ch.length}. Części sprawdzeń nie dało się wykonać.`;
+  const show = v => v.length ? v.map(x => `<b>${esc(x)}</b>`).join(", ") : "brak";
+  $("#caseChecks").innerHTML = ch.map(c => `<li class="${c.status}">
+    <span class="mark" aria-hidden="true">${c.status === "ok" ? "✓" : c.status === "blad" ? "!" : "–"}</span>
+    <span class="name">${esc(c.name)}</span>
+    <span class="vals">${esc(c.detail)}. ${esc(STAMP[c.left_type] || c.left_type)}: ${show(c.left)} · ${esc(STAMP[c.right_type] || c.right_type)}: ${show(c.right)}</span></li>`).join("");
+  $("#caseChecksCard").classList.remove("hidden"); $("#caseDocsCard").classList.remove("hidden");
+}
+$("#openCase").onclick = () => $("#case").classList.remove("hidden");
+$("#closeCase").onclick = () => $("#case").classList.add("hidden");
+$("#caseRun").onclick = async () => {
+  const files = $("#caseFiles").files;
+  if (!files.length) { $("#caseMsg").className = "msg err"; $("#caseMsg").textContent = "Wybierz pliki PDF sprawy (od 2 do 10)."; return; }
+  const fd = new FormData(); [...files].forEach(f => fd.append("files", f));
+  $("#caseRun").disabled = true; $("#caseMsg").className = "msg";
+  $("#caseMsg").innerHTML = `<span class="busy"></span>Przetwarzanie ${files.length} dokumentów. Skany trwają dłużej.`;
+  try {
+    const r = await fetch("/api/case", { method: "POST", body: fd }); const d = await r.json();
+    if (!r.ok) throw new Error(d.error || d.detail || "Błąd serwera");
+    renderCase(d); $("#caseMsg").className = "msg ok"; $("#caseMsg").textContent = "Gotowe.";
+  } catch (e) { $("#caseMsg").className = "msg err"; $("#caseMsg").textContent = e.message; }
+  finally { $("#caseRun").disabled = false; }
 };
 
 $("#openCreator").onclick = () => { $("#creator").classList.remove("hidden"); loadTypes(); };

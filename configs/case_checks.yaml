@@ -1,0 +1,26 @@
+# Sprawdzenia spojnosci miedzy dokumentami jednej sprawy (widok "Sprawa" w GUI).
+# Nie wplywaja na pliki JSON oddawane do oceny. Nowe sprawdzenie dopisuje sie tutaj, bez zmian w kodzie.
+#
+# left / right: <typ dokumentu>:<sciezka pola jak w schemacie>
+# op:
+#   same_person  - ta sama osoba (imie i nazwisko, kolejnosc i wielkosc liter bez znaczenia)
+#   same_number  - ten sam numer (NIP, KRS, REGON; liczą się tylko cyfry)
+#   same_name    - ta sama nazwa podmiotu (dopasowanie przyblizone)
+#   contained    - wartosc z lewej wystepuje w tekscie z prawej (bez spacji i znakow interpunkcji)
+checks:
+  - name: Pełnomocnik z odwołania występuje w pełnomocnictwie
+    left: odwolanie:Odwolujacy[].pelnomocnik.imie_nazwisko
+    right: pelnomocnictwo:pelnomocnicy[].imie_nazwisko
+    op: same_person
+  - name: Mocodawca w pełnomocnictwie to odwołujący (NIP)
+    left: odwolanie:Odwolujacy[].nip
+    right: pelnomocnictwo:mocodawca[].data.nip
+    op: same_number
+  - name: Mocodawca w pełnomocnictwie to odwołujący (nazwa)
+    left: odwolanie:Odwolujacy[].nazwa
+    right: pelnomocnictwo:mocodawca[].data.nazwa
+    op: same_name
+  - name: Tytuł przelewu wskazuje numer postępowania z odwołania
+    left: odwolanie:ZamowieniePubliczne.numer_postepowania
+    right: przelew:przelew_bankowy.tytul
+    op: contained

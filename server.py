@@ -15,7 +15,7 @@ import uvicorn  # noqa: E402
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse, Response  # noqa: E402
 
-from core import creator  # noqa: E402
+from core import case, creator  # noqa: E402
 from core.llm import USAGE  # noqa: E402
 from core.pipeline import Extractor  # noqa: E402
 
@@ -73,6 +73,36 @@ async def extract(file: UploadFile = File(...)):
     res["filename"] = file.filename
     res["doc_id"] = doc_id
     return JSONResponse(json.loads(json.dumps(res, ensure_ascii=False, default=str)))
+
+
+@app.post("/api/case")
+async def case_check(files: list[UploadFile] = File(...)):
+    """Sprawa: kilka PDF-ow naraz, typ i dane kazdego oraz sprawdzenia spojnosci z configs/case_checks.yaml."""
+    docs = []
+    for f in files[:10]:
+        data = await f.read()
+        item = {"filename": f.filename, "type": None, "result": {}, "error": None}
+        try:
+            _d = pymupdf.open(stream=data, filetype="pdf")
+            bad = _d.needs_pass or _d.page_count == 0
+            _d.close()
+            if bad:
+                raise ValueError
+        except Exception:
+            item["error"] = "Plik uszkodzony, pusty albo zabezpieczony hasłem."
+            docs.append(item)
+            continue
+        doc_id = hashlib.sha256(data).hexdigest()[:16]
+        path = UPLOADS / f"{doc_id}.pdf"
+        path.write_bytes(data)
+        try:
+            res = ex.process(path)
+            item.update(type=res.get("type"), result=res.get("result") or {}, doc_id=doc_id)
+        except Exception as e:
+            item["error"] = f"Błąd podczas przetwarzania: {type(e).__name__}: {e}"
+        docs.append(item)
+    payload = {"documents": docs, "checks": case.run_checks(docs), "usage": USAGE.as_dict()}
+    return JSONResponse(json.loads(json.dumps(payload, ensure_ascii=False, default=str)))
 
 
 @app.get("/api/page/{doc_id}/{n}")

@@ -70,6 +70,16 @@ PDF ─► PyMuPDF (warstwa tekstowa, 4 pierwsze strony)
 - **Licznik tokenów i kosztu** jest w `core/llm.py`. Limit aplikacyjny to `session_budget_usd`.
 - **Transparentność:** zakładka „Przebieg” w GUI i opcja `--trace` pokazują wynik klasyfikacji, użyte reguły, źródło każdej wartości, odrzucone wartości i ostrzeżenia.
 
+## Sprawa: kilka dokumentów naraz (GUI)
+
+Przycisk **Sprawa** w GUI przyjmuje naraz dokumenty jednej sprawy (odwołanie, pełnomocnictwo, potwierdzenie przelewu). Każdy dokument dostaje swój JSON, a program sprawdza zgodność danych między dokumentami, np.:
+
+- czy pełnomocnik z odwołania jest wymieniony w pełnomocnictwie,
+- czy mocodawca w pełnomocnictwie to odwołujący (NIP i nazwa),
+- czy tytuł przelewu wskazuje numer postępowania z odwołania.
+
+Sprawdzenia są opisane w `configs/case_checks.yaml` (pole z lewej, pole z prawej, rodzaj porównania). Nowe sprawdzenie dopisuje się w tym pliku, bez zmian w kodzie. Na wzorcach UZP wszystkie 60 spraw przechodzi wszystkie sprawdzenia. Widok nie zmienia plików JSON oddawanych do oceny.
+
 ## Dodanie nowej klasy dokumentów (bez programowania)
 
 **W GUI (kreator):** przycisk **Typy dokumentów** → podajesz nazwę, przykładowy wynik JSON i 1-5 przykładowych PDF-ów → **Przygotuj typ**. System sam:
