@@ -49,9 +49,24 @@ def _match(op, a, b):
     raise ValueError(f"nieznana operacja sprawdzenia: {op}")
 
 
+def _per_doc(docs, spec):
+    doc_type, field = spec.split(":", 1)
+    out = []
+    for i, d in enumerate(docs):
+        if d.get("type") == doc_type:
+            vals = [v for _, _, v in paths.iter_values(d.get("result") or {}, field) if v not in (None, "")]
+            name = d.get("filename") or "dokument"
+            if sum(1 for x in docs if x.get("filename") == name) > 1:
+                name += f" (plik nr {i + 1})"
+            out.append((name, vals))
+    return out
+
+
 def run_checks(docs, checks=None):
-    """docs: [{"type": ..., "result": {...}}]. Zwraca liste {name, status, left, right, detail}.
-    status: ok | blad | brak (brak dokumentu albo wartosci)."""
+    """docs: [{"type": ..., "result": {...}, "filename": ...}]. Zwraca liste {name, status, left, right, detail}.
+    status: ok | blad | brak (brak dokumentu albo wartosci).
+    Kazdy dokument po obu stronach musi pasowac do drugiej strony: gdy wczytano np. dwa pelnomocnictwa
+    z roznych spraw, to niepasujace zostanie wskazane z nazwy pliku."""
     out = []
     present = {d.get("type") for d in docs}
     for c in checks if checks is not None else load_checks():
@@ -61,11 +76,25 @@ def run_checks(docs, checks=None):
         missing = [t for t in (lt, rt) if t not in present]
         if missing:
             item.update(status="brak", detail="Brak dokumentu: " + ", ".join(sorted(set(missing))))
-        elif not left or not right:
+            out.append(item)
+            continue
+        if not left or not right:
             item.update(status="brak", detail="Brak wartości do porównania")
-        elif any(_match(c["op"], a, b) for a in left for b in right):
-            item.update(status="ok", detail="Zgodne")
-        else:
+            out.append(item)
+            continue
+        bad = []
+        for fname, vals in _per_doc(docs, c["left"]):
+            if vals and not any(_match(c["op"], a, b) for a in vals for b in right):
+                bad.append(fname)
+        for fname, vals in _per_doc(docs, c["right"]):
+            if vals and not any(_match(c["op"], a, b) for a in left for b in vals):
+                bad.append(fname)
+        if not any(_match(c["op"], a, b) for a in left for b in right):
             item.update(status="blad", detail="Niezgodne, sprawdź dokumenty")
+        elif bad:
+            item.update(status="blad", detail="Niezgodne: " + ", ".join(dict.fromkeys(bad)) +
+                        "; sprawdź, czy wszystkie dokumenty są z tej samej sprawy")
+        else:
+            item.update(status="ok", detail="Zgodne")
         out.append(item)
     return out
