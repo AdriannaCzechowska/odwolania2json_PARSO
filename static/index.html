@@ -168,6 +168,11 @@
   .case-pick #caseFiles { flex: 1; min-width: 240px; padding: 6px; border: 1.5px dashed var(--line); border-radius: 8px; background: #FBFCFD; color: var(--ink-soft); font-size: 14px; }
   .case-pick #caseRun { padding-left: 26px; padding-right: 26px; }
   .case-pick #caseMsg { flex-basis: 100%; }
+  /* lista wybranych plikow sprawy: mozna dokladac pliki kilkoma wyborami */
+  .case-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .case-list li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: #F3F5FA; font-size: 14px; }
+  .case-list button { border: 0; background: transparent; cursor: pointer; font-size: 16px; line-height: 1; color: var(--ink-soft); padding: 2px 6px; border-radius: 4px; }
+  .case-list button:hover { background: #E2E6F0; color: var(--ink); }
   .pick-any input[type=file] { flex: 1; min-width: 240px; padding: 6px; border: 1.5px dashed var(--line); border-radius: 8px; background: #FBFCFD; color: var(--ink-soft); font-size: 14px; }
   .pick-any > .btn { padding-left: 26px; padding-right: 26px; }
   /* przyciski akcji w tabeli typow wyrownane do prawej krawedzi, jak "Przygotuj typ" */
@@ -379,6 +384,7 @@ cache</pre><pre style="right:10%;bottom:24%">def extract(pdf: Path) -&gt; dict:
       <label class="f" for="caseFiles" style="margin:0 0 8px">Dokumenty sprawy <span class="hint">od 2 do 10 plików PDF: odwołanie, pełnomocnictwo, potwierdzenie przelewu</span></label>
       <div class="row case-pick" style="margin:0"><input type="file" id="caseFiles" accept="application/pdf" multiple aria-label="Dokumenty sprawy (PDF)">
         <button class="btn" id="caseRun">Sprawdź sprawę</button><span class="msg" id="caseMsg"></span></div>
+      <ul class="case-list" id="caseList" aria-label="Wybrane pliki sprawy"></ul>
     </div>
     <div class="card hidden" id="caseChecksCard"><p class="summary" id="caseSummary"></p><ul class="checks" id="caseChecks"></ul></div>
     <div class="card hidden" id="caseDocsCard"><h3>Dokumenty</h3><table class="types-table case-docs" id="caseDocs"></table></div>
@@ -842,9 +848,26 @@ function setView(v) {
 $("#navMain").onclick = () => setView("main");
 $("#openCase").onclick = () => setView("case");
 $("#closeCase").onclick = () => setView("main");
+// pliki sprawy zbieramy z kolejnych wyborow (przegladarka przy nowym wyborze zapomina poprzedni)
+let caseFiles = [];
+function renderCaseList() {
+  $("#caseList").innerHTML = caseFiles.map((f, i) =>
+    `<li>${esc(f.name)}<button type="button" data-i="${i}" aria-label="Usuń ${esc(f.name)}">×</button></li>`).join("");
+  $("#caseList").querySelectorAll("button").forEach(b => b.onclick = () => { caseFiles.splice(+b.dataset.i, 1); renderCaseList(); });
+}
+$("#caseFiles").onchange = e => {
+  for (const f of e.target.files) {
+    if (!/pdf$/i.test(f.type || f.name)) continue;
+    if (!caseFiles.some(x => x.name === f.name && x.size === f.size)) caseFiles.push(f);
+  }
+  caseFiles = caseFiles.slice(0, 10);
+  e.target.value = "";
+  $("#caseMsg").className = "msg"; $("#caseMsg").textContent = caseFiles.length ? `Wybrano ${caseFiles.length} z maks. 10 plików. Możesz dodać kolejne.` : "";
+  renderCaseList();
+};
 $("#caseRun").onclick = async () => {
-  const files = $("#caseFiles").files;
-  if (!files.length) { $("#caseMsg").className = "msg err"; $("#caseMsg").textContent = "Wybierz pliki PDF sprawy (od 2 do 10)."; return; }
+  const files = caseFiles;
+  if (files.length < 2) { $("#caseMsg").className = "msg err"; $("#caseMsg").textContent = "Wybierz co najmniej 2 pliki PDF sprawy (maks. 10)."; return; }
   const fd = new FormData(); [...files].forEach(f => fd.append("files", f));
   $("#caseRun").disabled = true; $("#caseMsg").className = "msg";
   $("#caseMsg").innerHTML = `<span class="busy"></span>Przetwarzanie ${files.length} dokumentów. Skany trwają dłużej.`;
