@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Odwołania2JSON</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;500&family=Poppins:wght@300;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --paper: #E9EDF2;      /* chlodny papier urzedowy */
@@ -36,7 +36,7 @@
   .btn.ghost { background: transparent; color: var(--stamp); }
   .btn:disabled { opacity: .5; cursor: default; }
 
-  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: calc(100% - 61px); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: 100%; }
   .pane { min-height: 0; display: flex; flex-direction: column; }
   .doc { border-right: 1px solid var(--line); }
 
@@ -109,7 +109,7 @@
   .trace ul { margin: 0; padding-left: 18px; }
   .trace li { margin: 2px 0; font-size: 13.5px; }
   pre.text { white-space: pre-wrap; font: 12.5px/1.5 "JetBrains Mono", monospace; background: #FBFCFD; border: 1px solid var(--line); padding: 12px; border-radius: var(--r-sm); }
-  .empty { color: var(--ink-soft); padding: 40px 0; max-width: 46ch; }
+  .empty { color: var(--ink-soft); padding: 4px 0 40px; max-width: 46ch; }
   .busy { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--stamp); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 8px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -142,10 +142,47 @@
   .drop:hover { border-color: var(--stamp); }
   .drop h2, .creator h2 { letter-spacing: -0.02em; line-height: 1.15; }
   .brand { letter-spacing: -0.02em; }
-  header { height: 61px; flex-wrap: nowrap; }
-  header > *, .nav button, .btn { white-space: nowrap; }
+  /* uklad: lewa kolumna dokument + nawigacja pod nim, prawa kolumna nazwa i model + analiza */
+  .bar { display: flex; align-items: center; gap: 16px; height: 64px; padding: 0 24px; background: var(--sheet); flex-shrink: 0; }
+  .leftbar { border-top: 1px solid var(--line); position: relative; z-index: 6; }
+  .apphead { border-bottom: 1px solid var(--line); }
+  .creator-inner { padding-bottom: 110px; }
+  .apphead .status { margin-left: auto; }
+  /* logo PARSO: "parso." grubo, podpis cienki, czerwona "2" */
+  .logo { padding-top: 6px; display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1; letter-spacing: 0; color: #111; }
+  .logo-word { font: 400 38px/0.84 "Bebas Neue", "Poppins", sans-serif; letter-spacing: 0.02em; }
+  .logo .logo-sub { display: block; margin: -1px 0 0 2px; color: #111; font: 300 10.5px/1 "Poppins", "Archivo", sans-serif; letter-spacing: 0.02em; }
+  .logo .logo-sub b { font-weight: 700; color: #A3121A; }
+  .leftbar .nav { flex: 1; }
+  .leftbar .nav button { flex: 1; }
+  /* na ekranach Sprawa i Typy pasek nawigacji unosi sie na dole na srodku zamiast bialego paska do polowy */
+  body.ov .leftbar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); height: 60px; padding: 0 8px;
+    border: 0; border-radius: 16px; box-shadow: 0 18px 40px rgba(3,8,26,.55), 0 4px 12px rgba(3,8,26,.35); }
+  body.ov .leftbar #pick { display: none; }
+  .tabs { gap: 0; padding: 0; height: 64px; flex-shrink: 0; }
+  .tab { flex: 1; padding: 0 10px; text-align: center; }
+  .tab[aria-selected="true"] { border-color: #A3121A; }
+  #tab-json > .row > .btn { flex: 1; }
+  /* wybor plikow: pole na cala szerokosc, przycisk akcji po prawej */
+  .case-pick { flex-wrap: wrap; }
+  .case-pick #caseFiles { flex: 1; min-width: 240px; padding: 6px; border: 1.5px dashed var(--line); border-radius: 8px; background: #FBFCFD; color: var(--ink-soft); font-size: 14px; }
+  .case-pick #caseRun { padding-left: 26px; padding-right: 26px; }
+  .case-pick #caseMsg { flex-basis: 100%; }
+  .pick-any input[type=file] { flex: 1; min-width: 240px; padding: 6px; border: 1.5px dashed var(--line); border-radius: 8px; background: #FBFCFD; color: var(--ink-soft); font-size: 14px; }
+  .pick-any > .btn { padding-left: 26px; padding-right: 26px; }
+  /* przyciski akcji w tabeli typow wyrownane do prawej krawedzi, jak "Przygotuj typ" */
+  .types-table td:last-child { text-align: right; padding-right: 0; white-space: nowrap; }
+  .types-table td:last-child .btn, .pick-any > .btn, .case-pick #caseRun, .creator .creator-inner > .row:first-child .btn.ghost { width: 200px; }
+  .pick-any > .msg { flex-basis: 100%; }
+  .pick-any > .msg:empty { display: none; }
+  #caseMsg:empty { display: none; }
+  input[type=file]::file-selector-button { font: 600 14px "Archivo", sans-serif; color: var(--stamp); background: var(--sheet); border: 1px solid var(--stamp); border-radius: 6px; padding: 7px 14px; margin-right: 12px; cursor: pointer; }
+  input[type=file]::file-selector-button:hover { background: #EEF1F8; }
+  #tab-json > .row > #jsonmsg { flex-basis: 100%; }
+  #jsonmsg:empty { display: none; }
+  .nav button, .btn, .brand, .status { white-space: nowrap; }
   .status { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  @media (max-width: 1360px) { .brand span { display: none; } }
+  @media (max-width: 1700px) { .brand span { display: none; } }
   @media (max-width: 1000px) { .status { display: none; } }
   /* nawigacja: gdzie jestem i dokad moge przejsc */
   .nav { display: flex; gap: 2px; padding: 3px; background: var(--paper); border: 1px solid var(--line); border-radius: 7px; }
@@ -167,7 +204,7 @@
   }
 
   /* kreator typow dokumentow */
-  .creator { position: fixed; inset: 61px 0 0 0; background: var(--paper); overflow: auto; z-index: 5; }
+  .creator { position: fixed; inset: 0; background: var(--paper); overflow: auto; z-index: 5; }
   .creator-inner { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
   .creator h2 { font-stretch: 125%; font-size: 24px; margin: 0 0 4px; }
   .creator h3 { font-size: 16px; margin: 0 0 10px; font-stretch: 112%; }
@@ -197,21 +234,59 @@
     .doc { border-right: 0; border-bottom: 1px solid var(--line); min-height: 60vh; }
     .file, .meta { padding-right: 0; } .stamp { position: static; display: inline-block; margin-top: 12px; }
   }
+
+  /* ===== prawa polowa: ciemny granat (kolorystyka urzedowa), jasny tekst ===== */
+  .result { --r-bg: #13214A; --r-deep: #0E1838; --r-ink: #F2F4FA; --r-soft: #AEB8D6; --r-line: rgba(255,255,255,.14); --r-red: #E5414A;
+            background: var(--r-bg); color: var(--r-ink); color-scheme: dark; }
+  .result .apphead, .result .result-head, .result .tabs { background: var(--r-bg); border-color: var(--r-line); }
+  .result .file, .result .meta, .result .status, .result .empty, .result .legend, .result dt, .result .item-label, .result dd .where { color: var(--r-soft); }
+  .result .meta b, .result .status b, .result section.group h3, .result .trace h4 { color: var(--r-ink); }
+  .result dl, .result dt, .result dd { border-color: var(--r-line); }
+  .result dd .null { color: #7D89AD; }
+  .result dd[data-conf="low"] { background: rgba(229,65,74,.16); }
+  .result dd.clickable:hover { background: rgba(255,255,255,.06); }
+  .result dd.clickable:active { background: rgba(255,255,255,.11); }
+  .result .tab { color: var(--r-soft); }
+  .result .tab[aria-selected="true"] { color: #fff; border-color: var(--r-red); }
+  .result .logo, .result .logo-word, .result .logo .logo-sub { color: #fff; }
+  .result .logo .logo-sub b { color: var(--r-red); }
+  .result .stamp { border-color: #E8ECF6; color: #E8ECF6; box-shadow: inset 0 0 0 2px var(--r-bg), inset 0 0 0 4px #E8ECF6; }
+  .result .stamp.unknown { border-color: #FF9A9A; color: #FF9A9A; box-shadow: inset 0 0 0 2px var(--r-bg), inset 0 0 0 4px #FF9A9A; }
+  .result .btn { background: #fff; color: var(--r-bg); border-color: #fff; }
+  .result .btn.ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,.55); }
+  .result .btn.ghost:hover:not(:disabled) { background: rgba(255,255,255,.08); }
+  .result textarea, .result pre.text { background: var(--r-deep); color: var(--r-ink); border-color: var(--r-line); }
+  .result .msg.ok { color: #7DDDAA; } .result .msg.err { color: #FF9A9A; }
+  .result .busy { border-color: rgba(255,255,255,.25); border-top-color: #fff; }
+  .result code { color: #fff; }
+  .result { --low: #FF7A80; }
+  /* ekrany Sprawa i Typy dokumentow: granatowe tlo jak prawa polowa, karty biale */
+  .creator { background: #13214A; color-scheme: dark; }
+  .creator .creator-inner > .row:first-child h2 { color: #fff; }
+  .creator .creator-inner > .row:first-child .lead { color: #AEB8D6; }
+  .creator .creator-inner > .row:first-child .lead code { color: #fff; }
+  .creator .creator-inner > .row:first-child .btn.ghost { color: #fff; border-color: rgba(255,255,255,.55); background: transparent; }
+  .creator .creator-inner > .row:first-child .btn.ghost:hover:not(:disabled) { background: rgba(255,255,255,.08); }
+  @font-face { font-family: "Bebas Neue"; src: url("/fonts/BebasNeue-Regular.ttf") format("truetype"); font-display: swap; }
+  /* tytul Typy dokumentow: pelny prostokat z przesunieta ramka, jak przyciski HackNation */
+  #creatorTitle, #caseTitle { position: relative; display: inline-block; margin: 8px 0 0; height: 40px; padding: 2px .5em 0; box-sizing: border-box; background: #7A0F1E; color: #fff;
+    font-family: "Bebas Neue", Oswald, "Arial Narrow", sans-serif; font-weight: 400; font-size: 32px; line-height: 38px; text-transform: uppercase; letter-spacing: .03em; }
+  #creatorTitle::before, #caseTitle::before { content: ""; position: absolute; inset: -6px -7px 6px 7px; border: 1px solid rgba(255,255,255,.55); z-index: -1; }
+  #creatorTitle + .lead, #caseTitle + .lead { margin-top: 16px; }
+  .creator .card { color-scheme: light; box-shadow: 0 22px 48px rgba(3,8,26,.55), 0 6px 14px rgba(3,8,26,.35); border-color: transparent; }
+  /* polprzezroczyste fragmenty kodu w tle ekranow Sprawa i Typy; stoja w miejscu, panel przewija sie nad nimi */
+  .bg-code { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .bg-code pre { position: absolute; margin: 0; font: 12.5px/1.55 "JetBrains Mono", ui-monospace, Consolas, monospace; color: #fff; opacity: .2; white-space: pre; }
+  .creator .creator-inner { position: relative; z-index: 1; }
+  @media (prefers-reduced-transparency: reduce) { .bg-code { display: none; } }
+  .creator .creator-inner > .row:first-child { align-items: flex-start; }
+  .creator .creator-inner > .row:first-child > .btn { margin-top: 8px; }
+  .creator .creator-inner > .row:first-child .btn.ghost { margin-right: 23px; }
+  .result .stamp { font-size: 22px; padding: 5px 11px 4px; }
+  .result .file, .result .meta { padding-right: 290px; }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">Odwołania2JSON<span>odwołania KIO, pełnomocnictwa i przelewy do JSON</span></div>
-  <div class="status" id="status">Łączenie z serwerem…</div>
-  <nav class="nav" aria-label="Widoki">
-    <button type="button" id="navMain" aria-current="page">Ekstrakcja</button>
-    <button type="button" id="openCase">Sprawa</button>
-    <button type="button" id="openCreator">Typy dokumentów</button>
-  </nav>
-  <button class="btn" id="pick">Wczytaj PDF</button>
-  <input type="file" id="file" accept="application/pdf" hidden>
-</header>
-
 <main>
   <div class="pane doc">
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Wczytaj plik PDF">
@@ -219,9 +294,25 @@
       <p>Odwołanie do KIO, pełnomocnictwo albo potwierdzenie przelewu. Typ rozpoznamy automatycznie, także w skanach.</p>
     </div>
     <div class="pages hidden" id="pages" aria-label="Podgląd dokumentu"></div>
+    <div class="bar leftbar">
+      <nav class="nav" aria-label="Widoki">
+        <button type="button" id="navMain" aria-current="page">Ekstrakcja</button>
+        <button type="button" id="openCase">Sprawa</button>
+        <button type="button" id="openCreator">Typy dokumentów</button>
+      </nav>
+      <button class="btn" id="pick">Wczytaj PDF</button>
+      <input type="file" id="file" accept="application/pdf" hidden>
+    </div>
   </div>
 
   <div class="pane result">
+    <div class="bar apphead">
+      <div class="brand logo" role="img" aria-label="PARSO, Odwołania2JSON">
+        <div class="logo-word" aria-hidden="true">parso.</div>
+        <div class="logo-sub" aria-hidden="true">ODWOŁANIA<b>2</b>JSON</div>
+      </div>
+      <div class="status" id="status">Łączenie z serwerem…</div>
+    </div>
     <div class="result-head">
       <div class="file" id="fname">Nie wczytano dokumentu</div>
       <div class="meta" id="meta"></div>
@@ -247,6 +338,17 @@
 
 
 <section class="creator hidden" id="case" aria-labelledby="caseTitle">
+  <div class="bg-code" aria-hidden="true"><pre style="left:9%;bottom:30%">def classify(text: str) -&gt; str:
+    scores = {t: rule_score(text, t) for t in TYPES}
+    best = max(scores, key=scores.get)
+    return best if scores[best] &gt;= 2 else &quot;unknown&quot;</pre><pre style="left:44%;bottom:44%">NIP_RE = r&quot;\d{3}-?\d{3}-?\d{2}-?\d{2}&quot;
+max_tokens = 1200
+cache</pre><pre style="right:10%;bottom:24%">def extract(pdf: Path) -&gt; dict:
+    pages = read_pages(pdf)
+    kind = classify(pages)
+    if kind == &quot;unknown&quot;:
+        return {}
+    return validate(ask_llm(pages, kind))</pre><pre style="left:30%;bottom:15%">{&quot;sygnatura&quot;: null, &quot;Odwolujacy&quot;: [{&quot;nazwa&quot;: &quot;...&quot;, &quot;NIP&quot;: &quot;...&quot;}]}</pre></div>
   <div class="creator-inner">
     <div class="row" style="justify-content:space-between;align-items:flex-start;margin-top:0">
       <div><h2 id="caseTitle">Sprawa</h2>
@@ -254,7 +356,8 @@
       <button class="btn ghost" id="closeCase">Wróć do ekstrakcji</button>
     </div>
     <div class="card">
-      <div class="row" style="margin-top:0"><input type="file" id="caseFiles" accept="application/pdf" multiple aria-label="Dokumenty sprawy (PDF)">
+      <label class="f" for="caseFiles" style="margin:0 0 8px">Dokumenty sprawy <span class="hint">od 2 do 10 plików PDF: odwołanie, pełnomocnictwo, potwierdzenie przelewu</span></label>
+      <div class="row case-pick" style="margin:0"><input type="file" id="caseFiles" accept="application/pdf" multiple aria-label="Dokumenty sprawy (PDF)">
         <button class="btn" id="caseRun">Sprawdź sprawę</button><span class="msg" id="caseMsg"></span></div>
     </div>
     <div class="card hidden" id="caseChecksCard"><p class="summary" id="caseSummary"></p><ul class="checks" id="caseChecks"></ul></div>
@@ -263,6 +366,14 @@
 </section>
 
 <section class="creator hidden" id="creator" aria-labelledby="creatorTitle">
+  <div class="bg-code" aria-hidden="true"><pre style="left:61%;top:22px">types = load_yaml()
+for t in types:
+    t.check()</pre><pre style="left:1.5%;top:34%">import fitz
+OCR = True
+lang = &quot;pol&quot;</pre><pre style="right:1.5%;top:58%">return {}
+# F1 0.983</pre><pre style="left:1.5%;top:78%">json.dump(
+  out, f)</pre><pre style="right:1.5%;top:20%">def snap():
+  ...</pre></div>
   <div class="creator-inner">
     <div class="row" style="justify-content:space-between;margin-top:0">
       <div><h2 id="creatorTitle">Typy dokumentów</h2>
@@ -276,8 +387,8 @@
       <h3>Dodaj nowy typ</h3>
       <div class="grid2">
         <label class="f">Nazwa techniczna <span class="hint">małe litery, cyfry i _, np. faktura_vat</span><input type="text" id="cName" value="faktura_vat"></label>
-        <label class="f">Nazwa dla ludzi<input type="text" id="cDesc" value="Faktura VAT"></label>
-        <label class="f" style="grid-column:1/-1">Przykładowy wynik JSON <span class="hint">taki, jaki ma powstać z jednego z przykładowych PDF-ów; wartości z tego pliku pomagają nauczyć się etykiet</span>
+        <label class="f">Nazwa wyświetlana <span class="hint">tak typ będzie widoczny w aplikacji, np. Faktura VAT</span><input type="text" id="cDesc" value="Faktura VAT"></label>
+        <label class="f" style="grid-column:1/-1">Przykładowy wynik JSON <span class="hint">wpisz dane z jednego z przykładowych PDF-ów; na ich podstawie program rozpozna, gdzie w dokumencie są poszczególne pola</span>
           <textarea id="cExample">{
   "numer_faktury": "FV/2026/11/0042",
   "data_wystawienia": "2026-11-05",
@@ -285,9 +396,9 @@
   "nabywca": { "nazwa": "Urząd Gminy Modrzewiec", "nip": "9990342967" },
   "kwota_brutto": 2460.00
 }</textarea></label>
-        <label class="f" style="grid-column:1/-1">Przykładowe PDF-y (1-5)<input type="file" id="cFiles" accept="application/pdf" multiple></label>
+        <label class="f" for="cFiles" style="grid-column:1/-1;margin-bottom:0">Przykładowe PDF-y <span class="hint">od 1 do 5 plików tego typu, na których program sprawdzi konfigurację</span></label>
       </div>
-      <div class="row"><button class="btn" id="cDraft">Przygotuj typ</button><span class="msg" id="cMsg"></span></div>
+      <div class="row case-pick pick-any"><input type="file" id="cFiles" accept="application/pdf" multiple aria-label="Przykładowe PDF-y"><button class="btn" id="cDraft">Przygotuj typ</button><span class="msg" id="cMsg"></span></div>
     </div>
 
     <div class="card hidden" id="draftCard">
@@ -631,8 +742,22 @@ function renderCase(res) {
   $("#caseChecksCard").classList.remove("hidden"); $("#caseDocsCard").classList.remove("hidden");
 }
 function setView(v) {
+  // plynne przejscie: pasek nawigacji przesuwa sie na nowe miejsce, ekran wchodzi lagodnie
+  const bar = document.querySelector(".leftbar"), wasOv = document.body.classList.contains("ov");
+  const first = bar.getBoundingClientRect(), calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const prev = ["case", "creator"].find(id => !$("#" + id).classList.contains("hidden")) || "main";
   $("#case").classList.toggle("hidden", v !== "case");
   $("#creator").classList.toggle("hidden", v !== "creator");
+  document.body.classList.toggle("ov", v !== "main");
+  if (!calm && bar.animate && prev !== v) {
+    const last = bar.getBoundingClientRect(), base = getComputedStyle(bar).transform, b = base === "none" ? "" : base;
+    if (wasOv !== (v !== "main"))
+      bar.animate([{ transform: `translate(${first.left - last.left}px, ${first.top - last.top}px) ${b}` }, { transform: b || "none" }],
+                  { duration: 520, easing: "cubic-bezier(.2,.85,.25,1)" });
+    const scr = v === "main" ? document.querySelector("main") : $("#" + v);
+    if (scr && scr.animate) scr.animate(v === "main" ? [{ opacity: .4 }, { opacity: 1 }] : [{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }],
+                                        { duration: 320, easing: "cubic-bezier(.2,.8,.2,1)" });
+  }
   [["navMain", "main"], ["openCase", "case"], ["openCreator", "creator"]].forEach(([id, name]) =>
     name === v ? $("#" + id).setAttribute("aria-current", "page") : $("#" + id).removeAttribute("aria-current"));
   if (v === "creator") loadTypes();

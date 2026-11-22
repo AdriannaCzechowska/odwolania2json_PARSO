@@ -43,6 +43,14 @@ def index():
     return FileResponse(ROOT / "static" / "index.html")
 
 
+@app.get("/fonts/{name}")
+def font(name: str):
+    f = ROOT / "static" / "fonts" / Path(name).name
+    if f.suffix != ".ttf" or not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="font/ttf", headers={"Cache-Control": "max-age=86400"})
+
+
 @app.get("/api/info")
 def info():
     return {"model": ex.llm.model, "llm_available": ex.llm.available,
